@@ -1,7 +1,7 @@
 'use client';
 
 import React from "react";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Waveform } from "@/components/ui/waveform";
-import { format, subDays } from "date-fns";
-import { ChevronDown, ChevronUp, Phone, Search, Mic, Calendar, Download, Filter, SlidersHorizontal, BarChart2 } from "lucide-react";
+import { format } from "date-fns";
+import { ChevronDown, ChevronUp, Phone, Search, Mic, Calendar, Download } from "lucide-react";
 import { CallStatus } from "@/lib/types";
 import { formatPhoneNumber, formatDuration } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { type VoiceHistoryItem, type CallHistoryItem } from "@/lib/interfaces";
+import { motion } from "framer-motion";
 
 
 // Mock data for demonstration
