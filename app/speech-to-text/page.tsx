@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 const openai = new OpenAI({
-  apiKey: "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",
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true,
 });
 

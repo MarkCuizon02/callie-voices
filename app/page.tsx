@@ -19,10 +19,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 
-// Initialize OpenAI client with hardcoded API key (FOR TESTING ONLY)
+// Initialize OpenAI client with API key from environment variable
 const openai = new OpenAI({
-  apiKey: "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",
-  dangerouslyAllowBrowser: true, // Allow client-side API calls (not secure for production)
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true, // Allow client-side API calls
 });
 
 interface Message {
