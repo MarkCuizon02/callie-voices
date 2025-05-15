@@ -2,87 +2,73 @@
 
 import { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
-import { Button } from "@/components/ui/button";
-import { Pause, Play } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface WaveformProps {
   audioUrl: string;
   waveColor?: string;
   progressColor?: string;
-  className?: string;
 }
 
-export function Waveform({
-  audioUrl,
-  waveColor = "hsl(var(--primary))",
-  progressColor = "hsl(var(--primary) / 0.5)",
-  className,
-}: WaveformProps) {
-  const waveformRef = useRef<HTMLDivElement>(null);
-  const wavesurfer = useRef<WaveSurfer | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+export function Waveform({ audioUrl, waveColor = "hsl(var(--primary))", progressColor = "hsl(var(--primary) / 0.7)" }: WaveformProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!waveformRef.current) return;
+    if (!containerRef.current) return;
 
-    // Destroy previous instance
-    if (wavesurfer.current) {
-      wavesurfer.current.destroy();
-    }
-
-    // Create new WaveSurfer instance
-    const ws = WaveSurfer.create({
-      container: waveformRef.current,
-      waveColor: waveColor,
-      progressColor: progressColor,
-      height: 50,
-      cursorWidth: 1,
-      cursorColor: "transparent",
+    // Initialize WaveSurfer
+    wavesurferRef.current = WaveSurfer.create({
+      container: containerRef.current,
+      waveColor,
+      progressColor,
+      height: 40,
       barWidth: 2,
-      barGap: 2,
+      barGap: 1,
       barRadius: 2,
+      cursorWidth: 0,
+      normalize: true,
+      backend: "WebAudio",
     });
 
-    ws.load(audioUrl);
+    // Load audio
+    const loadAudio = async () => {
+      try {
+        if (audioUrl) {
+          await wavesurferRef.current?.load(audioUrl);
+          setIsReady(true);
+        }
+      } catch (error) {
+        console.error("WaveSurfer load error:", error);
+        setIsReady(false);
+      }
+    };
 
-    ws.on("ready", () => {
-      wavesurfer.current = ws;
+    loadAudio();
+
+    // Handle errors
+    wavesurferRef.current?.on("error", (error) => {
+      console.error("WaveSurfer error:", error);
+      setIsReady(false);
     });
 
-    ws.on("play", () => setIsPlaying(true));
-    ws.on("pause", () => setIsPlaying(false));
-    ws.on("finish", () => setIsPlaying(false));
-
-    // Cleanup
+    // Clean up
     return () => {
-      if (wavesurfer.current) {
-        wavesurfer.current.destroy();
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+        wavesurferRef.current = null;
       }
     };
   }, [audioUrl, waveColor, progressColor]);
 
-  const togglePlayPause = () => {
-    if (!wavesurfer.current) return;
-    
-    if (isPlaying) {
-      wavesurfer.current.pause();
-    } else {
-      wavesurfer.current.play();
-    }
-  };
-
   return (
-    <div className={cn("flex items-center space-x-2", className)}>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 rounded-full"
-        onClick={togglePlayPause}
-      >
-        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-      </Button>
-      <div ref={waveformRef} className="flex-1 min-h-[50px]" />
+    <div className="w-full">
+      <div ref={containerRef} className="w-full" />
+      {!isReady && (
+        <div className="text-center text-sm text-muted-foreground">
+          Loading waveform...
+        </div>
+      )}
     </div>
   );
 }

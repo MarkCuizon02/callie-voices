@@ -22,12 +22,9 @@ export async function POST(request: Request) {
     // Convert the file to a format OpenAI can use
     const buffer = Buffer.from(await audioFile.arrayBuffer());
     
-    // Create a Blob for the API request
-    const blob = new Blob([buffer], { type: audioFile.type });
-    
     // Call OpenAI's API to transcribe the audio
     const response = await openai.audio.transcriptions.create({
-      file: blob,
+      file: audioFile,
       model: 'whisper-1',
     });
     

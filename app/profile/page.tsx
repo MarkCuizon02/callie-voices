@@ -15,8 +15,8 @@ import { motion } from "framer-motion";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("account");
-  const [name, setName] = useState("Alex Johnson");
-  const [email, setEmail] = useState("alex@example.com");
+  const [name, setName] = useState("Mark Lloyd Cuizon");
+  const [email, setEmail] = useState("marklloydcuizon@gmail.com");
   
   // Demo API keys (in production these would be fetched from backend)
   const apiKeys = [

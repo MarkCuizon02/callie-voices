@@ -3,8 +3,8 @@ import twilio from 'twilio';
 // Initialize Twilio client
 // In production, use environment variables for API keys
 const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || 'your-account-sid',
-  process.env.TWILIO_AUTH_TOKEN || 'your-auth-token'
+  process.env.TWILIO_ACCOUNT_SID || 'AC6a85f2f1df3d7ce6345bfbb9a0f1e7b1',
+  process.env.TWILIO_AUTH_TOKEN || '283d3696726fa76ae8b5c7268806bab5'
 );
 
 export async function initiateCall(
