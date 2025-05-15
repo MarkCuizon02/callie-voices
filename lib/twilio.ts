@@ -1,10 +1,13 @@
 import twilio from 'twilio';
 
 // Initialize Twilio client
-// In production, use environment variables for API keys
+if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+  throw new Error('Missing Twilio credentials in environment variables');
+}
+
 const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID || 'AC6a85f2f1df3d7ce6345bfbb9a0f1e7b1',
-  process.env.TWILIO_AUTH_TOKEN || '283d3696726fa76ae8b5c7268806bab5'
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
 );
 
 export async function initiateCall(
