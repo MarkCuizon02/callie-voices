@@ -39,14 +39,15 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    
-    // Call OpenAI's API to generate speech
+      // Call OpenAI's API to generate speech with optimized settings
     const speechResponse = await openai.audio.speech.create({
-      model: 'tts-1',
+      model: 'tts-1-hd', // Using HD model for better quality
       voice: voice as Voice,
       input: text,
       speed: speechSpeed,
-    });
+      response_format: 'mp3', // Using MP3 for better compression
+      quality: 'high' // Request higher quality audio
+    } as any);
     
     // Get the audio data as an ArrayBuffer
     const buffer = await speechResponse.arrayBuffer();

@@ -25,6 +25,41 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true, // Allow client-side API calls
 });
 
+const AudioCache = new Map<string, { audio: HTMLAudioElement, timestamp: number }>();
+
+// Audio cache cleanup interval (30 minutes)
+const CACHE_CLEANUP_INTERVAL = 30 * 60 * 1000;
+
+// Maximum cache age (1 hour)
+const MAX_CACHE_AGE = 60 * 60 * 1000;
+
+function getOrCreateCachedAudio(url: string): HTMLAudioElement {
+  const now = Date.now();
+  const cached = AudioCache.get(url);
+
+  if (cached) {
+    cached.timestamp = now;
+    return cached.audio;
+  }
+
+  const audio = new Audio(url);
+  audio.preload = 'auto';
+  AudioCache.set(url, { audio, timestamp: now });
+
+  // Clean up old cache entries
+  if (AudioCache.size > 20) {
+    const entries = Array.from(AudioCache.entries());
+    const oldEntries = entries.filter(([_, value]) => now - value.timestamp > MAX_CACHE_AGE);
+    oldEntries.forEach(([key, value]) => {
+      value.audio.src = '';
+      URL.revokeObjectURL(key);
+      AudioCache.delete(key);
+    });
+  }
+
+  return audio;
+}
+
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
@@ -106,15 +141,48 @@ const voicePersonalities: VoicePersonality[] = [
   }
 ];
 
-// Transcription function using OpenAI Whisper API
+// Transcription function using OpenAI Whisper API with optimized handling
 async function transcribeSpeech(audioBlob: Blob): Promise<string> {
   try {
-    const audioFile = new File([audioBlob], "recording.webm", { type: audioBlob.type });
+    // Compress audio before sending (if it's too large)
+    let processedBlob = audioBlob;
+    if (audioBlob.size > 25 * 1024 * 1024) { // If larger than 25MB
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Create a new buffer with lower sample rate
+      const offlineContext = new OfflineAudioContext(
+        1, // mono
+        audioBuffer.duration * 16000, // target sample rate: 16kHz
+        16000
+      );
+      
+      const source = offlineContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offlineContext.destination);
+      source.start();
+      
+      const renderedBuffer = await offlineContext.startRendering();
+      const wavBlob = await new Promise<Blob>((resolve) => {
+        const wav = new Blob([exportWAV(renderedBuffer)], { type: 'audio/wav' });
+        resolve(wav);
+      });
+      
+      processedBlob = wavBlob;
+    }
+
+    const audioFile = new File([processedBlob], "recording.wav", { type: "audio/wav" });
 
     const response = await openai.audio.transcriptions.create({
       file: audioFile,
       model: "whisper-1",
-    });
+      language: "auto",
+      response_format: "json",
+      temperature: 0.2,
+      prompt: "Convert speech to text with high accuracy, maintaining punctuation and formatting."
+    } as any);
 
     return response.text;
   } catch (error) {
@@ -123,18 +191,82 @@ async function transcribeSpeech(audioBlob: Blob): Promise<string> {
   }
 }
 
-// Speech generation function using OpenAI TTS API
+// Helper function to export audio buffer to WAV format
+function exportWAV(audioBuffer: AudioBuffer): Blob {
+  const interleaved = new Float32Array(audioBuffer.length);
+  const channel = audioBuffer.getChannelData(0);
+  for (let i = 0; i < audioBuffer.length; i++) {
+    interleaved[i] = channel[i];
+  }
+  
+  const dataview = encodeWAV(interleaved, audioBuffer.sampleRate);
+  const buffer = dataview.buffer as ArrayBuffer;
+  return new Blob([new Uint8Array(buffer)], { type: 'audio/wav' });
+}
+
+// Helper function to encode audio data to WAV format
+function encodeWAV(samples: Float32Array, sampleRate: number): DataView {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  
+  floatTo16BitPCM(view, 44, samples);
+  
+  return view;
+}
+
+function writeString(view: DataView, offset: number, string: string): void {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+function floatTo16BitPCM(output: DataView, offset: number, input: Float32Array): void {
+  for (let i = 0; i < input.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+}
+
+// Speech generation function using OpenAI TTS API with optimized handling
 async function generateSpeech(text: string, voice: string = "alloy", speed: number = 1.0): Promise<{ audioUrl: string }> {
   try {
-    const response = await openai.audio.speech.create({
-      model: "tts-1",
-      input: text,
-      voice: voice as any, // Type cast to bypass strict typing (ensure voice is valid)
-      speed
-    });
+    // Split long text into smaller chunks for faster processing
+    const MAX_CHUNK_LENGTH = 300;
+    const chunks = text.match(new RegExp(`.{1,${MAX_CHUNK_LENGTH}}(?=\\s|$)`, 'g')) || [text];
+    
+    const audioChunks: Blob[] = [];
+    
+    for (const chunk of chunks) {
+      const response = await openai.audio.speech.create({
+        model: "tts-1-hd", // Using HD model for better quality
+        input: chunk.trim(),
+        voice: voice as any,
+        speed,
+        response_format: 'mp3',
+      });
 
-    const audioBlob = await response.blob();
-    const audioUrl = URL.createObjectURL(audioBlob);
+      const audioBlob = await response.blob();
+      audioChunks.push(audioBlob);
+    }
+
+    // Combine all audio chunks into a single blob
+    const finalBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
+    const audioUrl = URL.createObjectURL(finalBlob);
+    
     return { audioUrl };
   } catch (error) {
     console.error("Speech generation error:", error);
@@ -310,6 +442,8 @@ export default function Home() {
   const [emotion, setEmotion] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const audioCleanupInterval = useRef<NodeJS.Timeout>();
+
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
 
@@ -368,17 +502,38 @@ export default function Home() {
       setIsProcessing(false);
     }
   };
-
-  // Auto-play AI audio when aiAudioUrl changes (e.g., after preview)
+  // Auto-play AI audio with optimized handling
   useEffect(() => {
-    if (aiAudioUrl && aiAudioRef.current) {
-      aiAudioRef.current.play().then(() => {
-        setIsPlayingAI(true);
-      }).catch((error) => {
-        console.error("Auto-play error:", error);
-      });
+    if (aiAudioUrl) {
+      const audio = getOrCreateCachedAudio(aiAudioUrl);
+      aiAudioRef.current = audio;
+
+      // Reset audio to start
+      audio.currentTime = 0;
+
+      // Configure audio settings for better performance
+      audio.preservesPitch = false; // Better performance when changing speed
+      audio.playbackRate = voiceSpeed;
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setIsPlayingAI(true);
+          })
+          .catch((error) => {
+            console.error("Auto-play error:", error);
+            setIsPlayingAI(false);
+          });
+      }
+
+      // Clean up previous audio URL if it exists
+      return () => {
+        audio.pause();
+        setIsPlayingAI(false);
+      };
     }
-  }, [aiAudioUrl]);
+  }, [aiAudioUrl, voiceSpeed]);
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -403,6 +558,33 @@ export default function Home() {
   useEffect(() => {
     setCharacterCount(textInput.length);
   }, [textInput]);
+
+  useEffect(() => {
+    // Set up cache cleanup interval
+    audioCleanupInterval.current = setInterval(() => {
+      const now = Date.now();
+      Array.from(AudioCache.entries()).forEach(([key, value]) => {
+        if (now - value.timestamp > MAX_CACHE_AGE) {
+          value.audio.src = '';
+          URL.revokeObjectURL(key);
+          AudioCache.delete(key);
+        }
+      });
+    }, CACHE_CLEANUP_INTERVAL);
+
+    // Cleanup on component unmount
+    return () => {
+      if (audioCleanupInterval.current) {
+        clearInterval(audioCleanupInterval.current);
+      }
+      // Clear all cached audio
+      AudioCache.forEach((value, key) => {
+        value.audio.src = '';
+        URL.revokeObjectURL(key);
+      });
+      AudioCache.clear();
+    };
+  }, []);
 
   const handleRecordingComplete = async (audioBlob: Blob) => {
     setIsProcessing(true);
