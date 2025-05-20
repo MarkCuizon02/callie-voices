@@ -18,11 +18,6 @@ const links = [
     icon: Bot
   },
   {
-    name: "History",
-    href: "/history",
-    icon: History
-  },
-  {
     name: "Usage",
     href: "/usage",
     icon: BarChart

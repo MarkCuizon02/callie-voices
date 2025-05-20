@@ -12,13 +12,15 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/use-toast";
-import { Mic, Speaker, Bot, ArrowRight, Download, Trash2, Play, Pause, Copy, Loader2, User, Smile, Frown, Meh, Angry } from "lucide-react";
+import { Mic, Speaker, Bot, ArrowRight, Download, Trash2, Play, Pause, Copy, Loader2, User, Smile, Frown, Meh, Angry, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
+import { SpeakingWaveform } from "@/components/ui/SpeakingWaveform";
+import { generateSpeech as generateSpeechPreview } from "@/lib/openai";
 
 // Initialize OpenAI client with API key from environment variable
 const openai = new OpenAI({
@@ -331,6 +333,11 @@ export default function Home() {
   const [style, setStyle] = useState(0);
   const [speakerBoost, setSpeakerBoost] = useState(false);
   const [quota, setQuota] = useState(1000);
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  const [typewriterIndex, setTypewriterIndex] = useState(0);
+  const autoText = "This is a sample text for speech synthesis. You can edit or replace it!";
 
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
@@ -498,7 +505,66 @@ export default function Home() {
         console.error('Auto-play error:', err);
       });
     }
+    // Add event listeners for play/pause/end to control isPlayingAI
+    const audio = aiAudioRef.current;
+    if (audio) {
+      const handlePlay = () => setIsPlayingAI(true);
+      const handlePause = () => setIsPlayingAI(false);
+      const handleEnded = () => setIsPlayingAI(false);
+      audio.addEventListener('play', handlePlay);
+      audio.addEventListener('pause', handlePause);
+      audio.addEventListener('ended', handleEnded);
+      // Clean up
+      return () => {
+        audio.removeEventListener('play', handlePlay);
+        audio.removeEventListener('pause', handlePause);
+        audio.removeEventListener('ended', handleEnded);
+      };
+    }
   }, [aiAudioUrl]);
+
+  const handlePreviewVoice = async (voiceId: string) => {
+    // Stop any currently playing preview
+    if (previewAudio) {
+      previewAudio.pause();
+      setPreviewAudio(null);
+      setPreviewingVoice(null);
+    }
+    setPreviewingVoice(voiceId);
+    try {
+      const { audioUrl } = await generateSpeechPreview("This is a sample of the selected voice.", voiceId, 1.0);
+      const audio = new Audio(audioUrl);
+      setPreviewAudio(audio);
+      audio.onended = () => setPreviewingVoice(null);
+      audio.onpause = () => setPreviewingVoice(null);
+      audio.play();
+    } catch (error) {
+      setPreviewingVoice(null);
+      toast({
+        title: "Preview Error",
+        description: error instanceof Error ? error.message : "Failed to preview voice.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAutoGenerateText = () => {
+    setIsAutoGenerating(true);
+    setTypewriterIndex(0);
+  };
+
+  useEffect(() => {
+    if (isAutoGenerating && typewriterIndex <= autoText.length) {
+      const timeout = setTimeout(() => {
+        setTextInput(autoText.slice(0, typewriterIndex));
+        setTypewriterIndex(typewriterIndex + 1);
+      }, 18);
+      if (typewriterIndex === autoText.length) {
+        setTimeout(() => setIsAutoGenerating(false), 300);
+      }
+      return () => clearTimeout(timeout);
+    }
+  }, [isAutoGenerating, typewriterIndex]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-full bg-background">
@@ -519,37 +585,64 @@ export default function Home() {
         </div>
         {/* Textarea */}
         <div className="px-12 pt-12 pb-6">
-          <textarea
-            className="w-full min-h-[300px] text-xl p-8 rounded-lg border-2 border-muted bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-            value={textInput}
-            onChange={e => setTextInput(e.target.value)}
-            placeholder="Type or paste your text here..."
-            disabled={isProcessing}
-          />
+          <div className="relative">
+            <textarea
+              className="w-full min-h-[300px] text-xl p-8 rounded-lg border-2 border-muted bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              value={textInput}
+              onChange={e => setTextInput(e.target.value)}
+              placeholder="Type or paste your text here..."
+              disabled={isProcessing || isAutoGenerating}
+            />
+            <button
+              type="button"
+              className={`absolute top-3 right-3 bg-muted rounded-full p-2 hover:bg-primary/10 transition`}
+              onClick={handleAutoGenerateText}
+              title="Auto-generate sample text"
+              tabIndex={0}
+            >
+              <Sparkles className={`h-5 w-5 text-primary ${isAutoGenerating ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
         {/* Bottom Controls Row */}
         <div className="flex items-center justify-between px-12 pb-8 pt-2">
           {/* Left: Voice Dropdown and Settings */}
           <div className="flex items-center gap-3">
-            <Select
-              value={selectedVoice}
-              onValueChange={setSelectedVoice}
-              aria-label="Select AI voice"
-            >
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Select a voice" />
-              </SelectTrigger>
-              <SelectContent>
-                {voicePersonalities.map((voice) => (
-                  <SelectItem key={voice.id} value={voice.id}>
-                    <div className="flex items-center gap-2">
-                      {voice.icon}
-                      <span>{voice.name} - {voice.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedVoice}
+                onValueChange={setSelectedVoice}
+                aria-label="Select AI voice"
+              >
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Select a voice" />
+                </SelectTrigger>
+                <SelectContent>
+                  {voicePersonalities.map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      <div className="flex items-center gap-2">
+                        {voice.icon}
+                        <span>{voice.name} - {voice.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {previewingVoice === selectedVoice ? (
+                <Loader2 className="h-5 w-5 animate-spin text-primary ml-2" />
+              ) : (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="ml-2"
+                  onClick={() => handlePreviewVoice(selectedVoice)}
+                  aria-label="Play voice preview"
+                >
+                  <Play className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
             <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" className="px-6">Settings</Button>
@@ -664,27 +757,21 @@ export default function Home() {
             <span className="text-sm text-muted-foreground">{textInput.length}/5000</span>
             <Button
               onClick={handleTextSubmit}
-              disabled={isProcessing || !textInput.trim()}
-              className="flex items-center gap-2 h-12 px-6 text-base"
+              disabled={isProcessing || !textInput.trim() || isPlayingAI}
+              className="flex items-center gap-3 h-12 px-6 text-base min-w-[100px] justify-center"
             >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowRight className="h-4 w-4" />
-              )}
-              Generate speech
+              <Play className="h-5 w-5" />
+              <SpeakingWaveform active={isPlayingAI} />
             </Button>
-            {aiAudioUrl && (
-              <Button
-                onClick={() => downloadAudio(aiAudioUrl, "tts-audio.wav")}
-                variant="outline"
-                className="flex items-center justify-center h-12 w-12 p-0"
-                disabled={!aiAudioUrl}
-                aria-label="Download audio"
-              >
-                <Download className="h-5 w-5" />
-              </Button>
-            )}
+            <Button
+              onClick={() => aiAudioUrl && downloadAudio(aiAudioUrl, "tts-audio.wav")}
+              variant="outline"
+              className="flex items-center justify-center h-12 w-12 p-0"
+              disabled={!aiAudioUrl}
+              aria-label={aiAudioUrl ? "Download audio" : "No audio to download"}
+            >
+              <Download className="h-5 w-5" />
+            </Button>
             {aiAudioUrl && (
               <audio
                 ref={aiAudioRef}
