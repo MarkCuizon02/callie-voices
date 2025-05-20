@@ -367,7 +367,14 @@ export default function Home() {
         return newQuota;
       });
 
+      // Stop any currently playing AI audio before playing new one
+      if (aiAudioRef.current) {
+        aiAudioRef.current.pause();
+        aiAudioRef.current.currentTime = 0;
+      }
       setAiAudioUrl(aiAudio);
+      // The useEffect on aiAudioUrl will handle playback
+      
       toast({ 
         title: "Success", 
         description: `Speech generated from your input. Used ${creditsUsed} credits.` 
@@ -570,6 +577,15 @@ export default function Home() {
     }
   }, [isAutoGenerating, typewriterIndex]);
 
+  useEffect(() => {
+    // Stop AI audio if playing when the voice is changed
+    if (aiAudioRef.current) {
+      aiAudioRef.current.pause();
+      aiAudioRef.current.currentTime = 0;
+    }
+    setIsPlayingAI(false);
+  }, [selectedVoice]);
+
   return (
     <div className="min-h-screen w-full flex flex-col bg-background">
       {/* Header */}
@@ -728,10 +744,16 @@ export default function Home() {
               <Button
                 onClick={handleTextSubmit}
                 disabled={isProcessing || !textInput.trim() || isPlayingAI}
-                className="flex items-center gap-3 h-12 px-6 text-base min-w-[100px] justify-center"
+                className="flex items-center gap-3 h-12 px-6 text-base min-w-[150px] justify-center"
               >
-                <Play className="h-5 w-5" />
-                <SpeakingWaveform active={isPlayingAI} />
+                {isProcessing ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Play className="h-5 w-5" />
+                    <span>Generate Speech</span>
+                  </>
+                )}
               </Button>
               <Button
                 onClick={() => aiAudioUrl && downloadAudio(aiAudioUrl, "tts-audio.wav")}
@@ -744,6 +766,14 @@ export default function Home() {
               </Button>
             </div>
           </div>
+          {/* Hidden audio element */}
+          <audio
+            ref={aiAudioRef}
+            src={aiAudioUrl}
+            onEnded={() => setIsPlayingAI(false)}
+            onPause={() => setIsPlayingAI(false)}
+            onPlay={() => setIsPlayingAI(true)}
+          />
         </div>
       </main>
     </div>
