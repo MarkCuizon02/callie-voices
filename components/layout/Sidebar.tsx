@@ -3,40 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Mic, Bot, History, User, ChevronLeft, ChevronRight, CreditCard, Settings, BarChart, Moon } from "lucide-react";
+import { Mic, Bot, History, User, ChevronLeft, ChevronRight, CreditCard, Settings, BarChart, Moon, Volume2, Music2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 
-const links = [
+const playgroundLinks = [
   {
-    name: "Voice Chat",
+    name: "Text to Speech",
     href: "/",
     icon: Mic
   },
   {
-    name: "AI Assistants",
-    href: "/assistants",
-    icon: Bot
+    name: "Voice Changer",
+    href: "/voice-changer",
+    icon: Volume2
   },
   {
-    name: "Usage",
-    href: "/usage",
-    icon: BarChart
-  },
-  {
-    name: "Billing",
-    href: "/billing",
-    icon: CreditCard
-  },
-  {
-    name: "API Settings",
-    href: "/api-settings",
-    icon: Settings
-  },
-  {
-    name: "Profile",
-    href: "/profile",
-    icon: User
+    name: "Sound Effects",
+    href: "/sound-effects",
+    icon: Music2
   }
 ];
 
@@ -65,34 +50,45 @@ export function Sidebar() {
         </button>
       </div>
       <nav className="flex-1 flex flex-col gap-1 mt-2">
-        {links.map((link) => {
-          const Icon = link.icon;
-          const active = pathname === link.href;
-          return (
-            <div key={link.href}>
+        {/* Playground section */}
+        {!collapsed && <div className="px-4 py-2 text-xs font-semibold text-muted-foreground select-none">Playground</div>}
+        <div className="flex flex-col gap-1">
+          {playgroundLinks.map((link) => {
+            const Icon = link.icon;
+            const active = pathname === link.href;
+            return (
               <Link
+                key={link.href}
                 href={link.href}
                 className={cn(
-                  "flex items-center gap-4 px-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary",
+                  "flex items-center gap-3 pl-8 pr-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary text-sm",
+                  collapsed && "justify-center pl-0 pr-0",
                   active && "bg-muted text-primary font-semibold"
                 )}
               >
-                <Icon className="h-5 w-5" />
-                {!collapsed && <span className="text-base">{link.name}</span>}
+                <Icon className="h-4 w-4" />
+                {!collapsed && <span>{link.name}</span>}
               </Link>
-              {!collapsed && link.name === "Profile" && (
-                <button
-                  className="flex items-center gap-4 px-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary w-full"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                >
-                  <Moon className="h-5 w-5" />
-                  <span className="text-base">Themes</span>
-                </button>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        {/* End Playground section */}
       </nav>
+      {/* Bottom section: only show when expanded */}
+      {!collapsed && (
+        <div className="flex flex-col gap-0 mt-auto">
+          <button
+            className="flex items-center gap-4 px-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary w-full"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          >
+            <Moon className="h-5 w-5" />
+            <span className="text-base">Themes</span>
+          </button>
+          <div className="px-4 py-2 text-xs text-muted-foreground border-t border-muted">
+            Quota remaining: 1000
+          </div>
+        </div>
+      )}
     </aside>
   );
 } 

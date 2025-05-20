@@ -173,6 +173,11 @@ async function chatWithAI(messages: Message[]): Promise<string> {
   }
 }
 
+const models = [
+  { id: "openai", name: "OpenAI" },
+  { id: "elevenlabs", name: "ElevenLabs" },
+];
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState("voice-chat");
   const [isRecording, setIsRecording] = useState(false);
@@ -342,6 +347,7 @@ export default function Home() {
   const [mode, setMode] = useState("simple");
   const [mainTab, setMainTab] = useState("generate");
   const [cardTab, setCardTab] = useState("text-to-speech");
+  const [selectedModel, setSelectedModel] = useState("openai");
 
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
@@ -608,7 +614,19 @@ export default function Home() {
                 TEXT TO SPEECH
               </button>
             </div>
-            <div className="text-xs text-muted-foreground">Quota remaining: {quota.toLocaleString()}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground font-medium">Model</span>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {/* Textarea */}
           <div className="px-8 pt-8 pb-4">  
