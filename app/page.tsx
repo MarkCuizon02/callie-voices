@@ -125,18 +125,27 @@ async function transcribeSpeech(audioBlob: Blob): Promise<string> {
 }
 
 // Speech generation function using OpenAI TTS API
-async function generateSpeech(text: string, voice: string = "alloy", speed: number = 1.0): Promise<{ audioUrl: string }> {
+async function generateSpeech(text: string, voice: string = "alloy", speed: number = 1.0): Promise<{ audioUrl: string; duration: number }> {
   try {
     const response = await openai.audio.speech.create({
       model: "tts-1",
       input: text,
-      voice: voice as any, // Type cast to bypass strict typing (ensure voice is valid)
+      voice: voice as any,
       speed
     });
 
     const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
-    return { audioUrl };
+    
+    // Create a temporary audio element to get duration
+    const audio = new Audio(audioUrl);
+    const duration = await new Promise<number>((resolve) => {
+      audio.addEventListener('loadedmetadata', () => {
+        resolve(audio.duration);
+      });
+    });
+
+    return { audioUrl, duration };
   } catch (error) {
     console.error("Speech generation error:", error);
     throw new Error("Failed to generate speech");
@@ -327,15 +336,36 @@ export default function Home() {
     if (!textInput.trim()) return;
     setIsProcessing(true);
     try {
-      // Only generate speech from the user's input
-      const { audioUrl: aiAudio } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
+      // Generate speech and get duration
+      const { audioUrl: aiAudio, duration } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
+      
+      // Calculate credits used (2 credits per 15 seconds, rounded up)
+      const creditsUsed = Math.ceil((duration / 15) * 2);
+      
+      // Update quota
+      setQuota(prevQuota => {
+        const newQuota = prevQuota - creditsUsed;
+        if (newQuota < 0) {
+          toast({
+            title: "Error",
+            description: "Not enough credits remaining.",
+            variant: "destructive",
+          });
+          throw new Error("Insufficient credits");
+        }
+        return newQuota;
+      });
+
       setAiAudioUrl(aiAudio);
-      toast({ title: "Success", description: "Speech generated from your input." });
+      toast({ 
+        title: "Success", 
+        description: `Speech generated from your input. Used ${creditsUsed} credits.` 
+      });
     } catch (error) {
       console.error("Error generating speech:", error);
       toast({
         title: "Error",
-        description: "Failed to generate speech. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate speech. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -474,8 +504,8 @@ export default function Home() {
     <div className="flex flex-col items-center justify-center min-h-screen w-full bg-background">
       {/* Header section: left-aligned, smaller title and summary */}
       <div className="w-full max-w-6xl mx-auto pt-8 pb-4">
-        <h1 className="text-lg font-bold leading-tight mb-1">Speech Synthesis</h1>
-        <p className="text-sm text-muted-foreground">Unleash the power of our cutting-edge technology to generate realistic, captivating speech in a wide range of languages.</p>
+        <h1 className="text-lg font-bold leading-tight mb-1">Voice Synthesis Engine</h1>
+        <p className="text-sm text-muted-foreground">Unleash the power of advanced AI to generate natural, expressive speech from text—across languages, tones, and styles.</p>
       </div>
       <Card className="w-full max-w-4xl mx-auto rounded-2xl shadow-xl border bg-background/80 p-0">
         {/* Tabs and Quota Row */}
@@ -586,14 +616,35 @@ export default function Home() {
                       if (!textInput.trim()) return;
                       setIsProcessing(true);
                       try {
-                        const { audioUrl: aiAudio } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
-                        setAiAudioUrl(aiAudio);
-                        toast({ title: "Success", description: "Speech generated from your input (via settings)." });
+                        const { audioUrl: settingsAudio, duration: settingsDuration } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
+                        
+                        // Calculate credits used (2 credits per 15 seconds, rounded up)
+                        const settingsCreditsUsed = Math.ceil((settingsDuration / 15) * 2);
+                        
+                        // Update quota
+                        setQuota(prevQuota => {
+                          const newQuota = prevQuota - settingsCreditsUsed;
+                          if (newQuota < 0) {
+                            toast({
+                              title: "Error",
+                              description: "Not enough credits remaining.",
+                              variant: "destructive",
+                            });
+                            throw new Error("Insufficient credits");
+                          }
+                          return newQuota;
+                        });
+
+                        setAiAudioUrl(settingsAudio);
+                        toast({ 
+                          title: "Success", 
+                          description: `Speech generated from your input (via settings). Used ${settingsCreditsUsed} credits.` 
+                        });
                       } catch (error) {
                         console.error("Error generating speech:", error);
                         toast({
                           title: "Error",
-                          description: "Failed to generate speech. Please try again.",
+                          description: error instanceof Error ? error.message : "Failed to generate speech. Please try again.",
                           variant: "destructive",
                         });
                       } finally {
