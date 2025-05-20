@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
 import { SpeakingWaveform } from "@/components/ui/SpeakingWaveform";
 import { generateSpeech as generateSpeechPreview } from "@/lib/openai";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Initialize OpenAI client with API key from environment variable
 const openai = new OpenAI({
@@ -338,6 +339,9 @@ export default function Home() {
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [typewriterIndex, setTypewriterIndex] = useState(0);
   const autoText = "This is a sample text for voice synthesis engine. You can edit or replace it!";
+  const [mode, setMode] = useState("simple");
+  const [mainTab, setMainTab] = useState("generate");
+  const [cardTab, setCardTab] = useState("text-to-speech");
 
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
@@ -567,62 +571,73 @@ export default function Home() {
   }, [isAutoGenerating, typewriterIndex]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-background">
-      {/* Header section: left-aligned, smaller title and summary */}
-      <div className="w-full max-w-6xl mx-auto pt-8 pb-4">
-        <h1 className="text-lg font-bold leading-tight mb-1">Voice Synthesis Engine</h1>
-        <p className="text-sm text-muted-foreground">Unleash the power of advanced AI to generate natural, expressive speech from text—across languages, tones, and styles.</p>
-      </div>
-      <Card className="w-full max-w-4xl mx-auto rounded-2xl shadow-xl border bg-background/80 p-0">
-        {/* Tabs and Quota Row */}
-        <div className="flex items-center justify-between px-12 pt-12 pb-2 border-b">
-          {/* Tabs */}
-          <div className="flex gap-6">
-            <Button variant="ghost" className="text-base font-semibold border-b-2 border-primary rounded-none cursor-default">Text to Speech</Button>
-          </div>
-          {/* Quota Info */}
-          <div className="text-sm text-muted-foreground">Quota remaining: {quota.toLocaleString()}</div>
+    <div className="min-h-screen w-full flex flex-col bg-background">
+      {/* Header */}
+      <header className="w-full flex items-center justify-between px-8 pt-8 pb-2 border-b border-muted">
+        <div>
+          <h1 className="text-2xl font-bold leading-tight mb-1">Speech Synthesis</h1>
+          <p className="text-sm text-muted-foreground">Unleash the power of our cutting-edge technology to generate realistic, captivating speech in a wide range of languages.</p>
         </div>
-        {/* Textarea */}
-        <div className="px-12 pt-12 pb-6">
-          <div className="relative">
-            <textarea
-              className="w-full min-h-[300px] text-xl p-8 rounded-lg border-2 border-muted bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-              value={textInput}
-              onChange={e => setTextInput(e.target.value)}
-              placeholder="Type or paste your text here..."
-              disabled={isProcessing || isAutoGenerating}
-            />
-            <button
-              type="button"
-              className={`absolute top-3 right-3 bg-muted rounded-full p-2 hover:bg-primary/10 transition`}
-              onClick={handleAutoGenerateText}
-              title="Auto-generate sample text"
-              tabIndex={0}
-            >
-              <Sparkles className={`h-5 w-5 text-primary ${isAutoGenerating ? 'animate-spin' : ''}`} />
-            </button>
+      </header>
+      {/* Main Card */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8">
+        <div className="w-full max-w-4xl rounded-2xl shadow-xl border bg-background/80 mx-auto p-0 min-h-[480px]">
+          {/* Card Tabs and Quota */}
+          <div className="flex items-center justify-between px-8 pt-6 pb-2 border-b">
+            <div className="flex gap-4">
+              <button
+                className={`text-sm font-semibold transition-colors ${cardTab === "text-to-speech" ? "text-primary" : "text-muted-foreground"}`}
+                onClick={() => setCardTab("text-to-speech")}
+              >
+                TEXT TO SPEECH
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground">Quota remaining: {quota.toLocaleString()}</div>
           </div>
-        </div>
-        {/* Bottom Controls Row */}
-        <div className="flex items-center justify-between px-12 pb-8 pt-2">
-          {/* Left: Voice Dropdown and Settings */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+          {/* Textarea */}
+          <div className="px-8 pt-8 pb-4">  
+            <div className="relative">
+              <textarea
+                className="w-full min-h-[340px] text-lg p-6 rounded-lg border-2 border-muted bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
+                placeholder="Type or paste your text here..."
+                disabled={isProcessing || isAutoGenerating}
+              />
+              <button
+                type="button"
+                className={`absolute top-3 right-3 bg-muted rounded-full p-2 hover:bg-primary/10 transition`}
+                onClick={handleAutoGenerateText}
+                title="Auto-generate sample text"
+                tabIndex={0}
+              >
+                <Sparkles className={`h-5 w-5 text-primary ${isAutoGenerating ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+          {/* Bottom Controls Row */}
+          <div className="flex items-center justify-between px-8 pb-8 pt-2 gap-4 flex-wrap">
+            {/* Voice selector and settings */}
+            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
               <Select
                 value={selectedVoice}
                 onValueChange={setSelectedVoice}
                 aria-label="Select AI voice"
               >
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="Select a voice" />
+                <SelectTrigger className="w-64">
+                  <div className="flex items-center gap-2 w-full">
+                    {voicePersonalities.find(v => v.id === selectedVoice)?.icon}
+                    <span className="truncate max-w-full">
+                      {voicePersonalities.find(v => v.id === selectedVoice)?.name} - {voicePersonalities.find(v => v.id === selectedVoice)?.description}
+                    </span>
+                  </div>
                 </SelectTrigger>
                 <SelectContent>
                   {voicePersonalities.map((voice) => (
                     <SelectItem key={voice.id} value={voice.id}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 w-full">
                         {voice.icon}
-                        <span>{voice.name} - {voice.description}</span>
+                        <span className="truncate max-w-full">{voice.name} - {voice.description}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -642,146 +657,95 @@ export default function Home() {
                   <Play className="h-5 w-5" />
                 </Button>
               )}
+              <Button variant="outline" className="ml-2 px-6" onClick={() => setSettingsOpen(true)}>
+                Settings
+              </Button>
+              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+                <SheetContent side="right" className="max-w-md w-full">
+                  <SheetHeader>
+                    <SheetTitle>Settings</SheetTitle>
+                  </SheetHeader>
+                  {/* Model Info Card */}
+                  <div className="rounded-lg border bg-muted p-4 mb-6">
+                    <div className="font-semibold mb-1">{modelInfo.name}</div>
+                    <div className="text-sm text-muted-foreground mb-2">{modelInfo.description}</div>
+                    <div className="flex gap-2 flex-wrap">
+                      {modelInfo.languages.map(lang => (
+                        <Badge key={lang} variant="secondary">{lang}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Sliders */}
+                  <div className="mb-4">
+                    <div className="mb-2 flex justify-between text-sm font-medium">
+                      <span>Stability</span>
+                      <span className="text-muted-foreground">{stability}%</span>
+                    </div>
+                    <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>More variable</span>
+                      <span>More stable</span>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <div className="mb-2 flex justify-between text-sm font-medium">
+                      <span>Similarity</span>
+                      <span className="text-muted-foreground">{similarity}%</span>
+                    </div>
+                    <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>Low</span>
+                      <span>High</span>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <div className="mb-2 flex justify-between text-sm font-medium">
+                      <span>Style Exaggeration</span>
+                      <span className="text-muted-foreground">{style}%</span>
+                    </div>
+                    <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>None</span>
+                      <span>Exaggerated</span>
+                    </div>
+                  </div>
+                  {/* Speaker Boost Toggle */}
+                  <div className="flex items-center gap-3 mb-6">
+                    <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
+                    <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
+                  </div>
+                  <SheetFooter>
+                    <Button variant="outline" onClick={() => {
+                      setStability(80); setSimilarity(70); setStyle(0); setSpeakerBoost(false);
+                    }}>Reset</Button>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
             </div>
-            <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="px-6">Settings</Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="max-w-md w-full">
-                <SheetHeader>
-                  <SheetTitle>Settings</SheetTitle>
-                </SheetHeader>
-                {/* Model Info Card */}
-                <div className="rounded-lg border bg-muted p-4 mb-6">
-                  <div className="font-semibold mb-1">{modelInfo.name}</div>
-                  <div className="text-sm text-muted-foreground mb-2">{modelInfo.description}</div>
-                  <div className="flex gap-2 flex-wrap">
-                    {modelInfo.languages.map(lang => (
-                      <Badge key={lang} variant="secondary">{lang}</Badge>
-                    ))}
-                  </div>
-                </div>
-                {/* Sliders */}
-                <div className="mb-4">
-                  <div className="mb-2 flex justify-between text-sm font-medium">
-                    <span>Stability</span>
-                    <span className="text-muted-foreground">{stability}%</span>
-                  </div>
-                  <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>More variable</span>
-                    <span>More stable</span>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <div className="mb-2 flex justify-between text-sm font-medium">
-                    <span>Similarity</span>
-                    <span className="text-muted-foreground">{similarity}%</span>
-                  </div>
-                  <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>Low</span>
-                    <span>High</span>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <div className="mb-2 flex justify-between text-sm font-medium">
-                    <span>Style Exaggeration</span>
-                    <span className="text-muted-foreground">{style}%</span>
-                  </div>
-                  <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>None</span>
-                    <span>Exaggerated</span>
-                  </div>
-                </div>
-                {/* Speaker Boost Toggle */}
-                <div className="flex items-center gap-3 mb-6">
-                  <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
-                  <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
-                </div>
-                <SheetFooter>
-                  <Button variant="outline" onClick={() => {
-                    setStability(80); setSimilarity(70); setStyle(0); setSpeakerBoost(false);
-                  }}>Reset</Button>
-                  <Button
-                    onClick={async () => {
-                      if (!textInput.trim()) return;
-                      setIsProcessing(true);
-                      try {
-                        const { audioUrl: settingsAudio, duration: settingsDuration } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
-                        
-                        // Calculate credits used (2 credits per 15 seconds, rounded up)
-                        const settingsCreditsUsed = Math.ceil((settingsDuration / 15) * 2);
-                        
-                        // Update quota
-                        setQuota(prevQuota => {
-                          const newQuota = prevQuota - settingsCreditsUsed;
-                          if (newQuota < 0) {
-                            toast({
-                              title: "Error",
-                              description: "Not enough credits remaining.",
-                              variant: "destructive",
-                            });
-                            throw new Error("Insufficient credits");
-                          }
-                          return newQuota;
-                        });
-
-                        setAiAudioUrl(settingsAudio);
-                        toast({ 
-                          title: "Success", 
-                          description: `Speech generated from your input (via settings). Used ${settingsCreditsUsed} credits.` 
-                        });
-                      } catch (error) {
-                        console.error("Error generating speech:", error);
-                        toast({
-                          title: "Error",
-                          description: error instanceof Error ? error.message : "Failed to generate speech. Please try again.",
-                          variant: "destructive",
-                        });
-                      } finally {
-                        setIsProcessing(false);
-                      }
-                    }}
-                    disabled={isProcessing || !textInput.trim()}
-                  >
-                    Generate speech
-                  </Button>
-                </SheetFooter>
-              </SheetContent>
-            </Sheet>
-          </div>
-          {/* Right: Character count, Generate, Download */}
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">{textInput.length}/5000</span>
-            <Button
-              onClick={handleTextSubmit}
-              disabled={isProcessing || !textInput.trim() || isPlayingAI}
-              className="flex items-center gap-3 h-12 px-6 text-base min-w-[100px] justify-center"
-            >
-              <Play className="h-5 w-5" />
-              <SpeakingWaveform active={isPlayingAI} />
-            </Button>
-            <Button
-              onClick={() => aiAudioUrl && downloadAudio(aiAudioUrl, "tts-audio.wav")}
-              variant="outline"
-              className="flex items-center justify-center h-12 w-12 p-0"
-              disabled={!aiAudioUrl}
-              aria-label={aiAudioUrl ? "Download audio" : "No audio to download"}
-            >
-              <Download className="h-5 w-5" />
-            </Button>
-            {aiAudioUrl && (
-              <audio
-                ref={aiAudioRef}
-                src={aiAudioUrl}
-                style={{ display: 'none' }}
-              />
-            )}
+            {/* Char count and generate/download */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-sm text-muted-foreground">{textInput.length}/5000</span>
+              <Button
+                onClick={handleTextSubmit}
+                disabled={isProcessing || !textInput.trim() || isPlayingAI}
+                className="flex items-center gap-3 h-12 px-6 text-base min-w-[100px] justify-center"
+              >
+                <Play className="h-5 w-5" />
+                <SpeakingWaveform active={isPlayingAI} />
+              </Button>
+              <Button
+                onClick={() => aiAudioUrl && downloadAudio(aiAudioUrl, "tts-audio.wav")}
+                variant="outline"
+                className="flex items-center justify-center h-12 w-12 p-0"
+                disabled={!aiAudioUrl}
+                aria-label={aiAudioUrl ? "Download audio" : "No audio to download"}
+              >
+                <Download className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </div>
-      </Card>
+      </main>
     </div>
   );
 }
