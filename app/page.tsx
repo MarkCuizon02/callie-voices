@@ -337,7 +337,7 @@ export default function Home() {
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [typewriterIndex, setTypewriterIndex] = useState(0);
-  const autoText = "This is a sample text for speech synthesis. You can edit or replace it!";
+  const autoText = "This is a sample text for voice synthesis engine. You can edit or replace it!";
 
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
