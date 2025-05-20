@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
 
 // Initialize OpenAI client with API key from environment variable
 const openai = new OpenAI({
@@ -310,58 +311,31 @@ export default function Home() {
   const [emotion, setEmotion] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelInfo, setModelInfo] = useState({
+    name: "Alloy",
+    description: "Neutral & Versatile",
+    languages: ["English"],
+  });
+  const [stability, setStability] = useState(80);
+  const [similarity, setSimilarity] = useState(70);
+  const [style, setStyle] = useState(0);
+  const [speakerBoost, setSpeakerBoost] = useState(false);
+  const [quota, setQuota] = useState(1000);
+
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
-
     setIsProcessing(true);
     try {
-      const emotions = {
-        happy: /\b(happy|joy|excited|great|wonderful)\b/i,
-        sad: /\b(sad|unhappy|depressed|terrible)\b/i,
-        angry: /\b(angry|mad|frustrated|annoyed)\b/i,
-        neutral: /\b(normal|okay|fine|alright)\b/i
-      };
-
-      const detectedEmotion = Object.entries(emotions).find(([_, regex]) => 
-        regex.test(textInput)
-      )?.[0] || "neutral";
-
-      setEmotion(detectedEmotion);
-
-      const systemMessage: Message = {
-        role: "system",
-        content: `You are a helpful AI assistant. Respond in ${selectedLanguage}. Maintain the conversation style and tone appropriate for ${selectedVoice}.`,
-        timestamp: new Date().toISOString(),
-      };
-
-      const userMessage: Message = {
-        role: "user",
-        content: textInput,
-        timestamp: new Date().toISOString(),
-      };
-
-      const updatedMessages = [...messages, systemMessage, userMessage];
-      setMessages(updatedMessages);
-      setUserMessage(textInput);
-
-      const response = await chatWithAI(updatedMessages);
-      setAiResponse(response);
-
-      const { audioUrl: aiAudio } = await generateSpeech(response, selectedVoice, voiceSpeed);
+      // Only generate speech from the user's input
+      const { audioUrl: aiAudio } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
       setAiAudioUrl(aiAudio);
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response, audioUrl: aiAudio, timestamp: new Date().toISOString() },
-      ]);
-
-      setTextInput("");
-      toast({ title: "Success", description: "Text message processed and AI response generated." });
+      toast({ title: "Success", description: "Speech generated from your input." });
     } catch (error) {
-      console.error("Error processing text:", error);
+      console.error("Error generating speech:", error);
       toast({
         title: "Error",
-        description: "Failed to process your text. Please try again.",
+        description: "Failed to generate speech. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -369,16 +343,6 @@ export default function Home() {
     }
   };
 
-  // Auto-play AI audio when aiAudioUrl changes (e.g., after preview)
-  useEffect(() => {
-    if (aiAudioUrl && aiAudioRef.current) {
-      aiAudioRef.current.play().then(() => {
-        setIsPlayingAI(true);
-      }).catch((error) => {
-        console.error("Auto-play error:", error);
-      });
-    }
-  }, [aiAudioUrl]);
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -495,438 +459,190 @@ export default function Home() {
     neutral: <Meh className="inline h-4 w-4 text-gray-400" />,
   };
 
+  // Restore auto-play AI audio when aiAudioUrl changes
+  useEffect(() => {
+    if (aiAudioUrl && aiAudioRef.current) {
+      aiAudioRef.current.currentTime = 0;
+      aiAudioRef.current.play().catch((err) => {
+        toast({ title: 'Playback Error', description: err.message, variant: 'destructive' });
+        console.error('Auto-play error:', err);
+      });
+    }
+  }, [aiAudioUrl]);
+
   return (
-    <main className="container max-w-4xl mx-auto py-10 px-4 sm:px-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="space-y-8" 
-      >
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-2">Audra</h1>
-          <p className="text-muted-foreground">Speak or type to interact with your AI assistant.</p>
-          <div className="mt-2 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <kbd className="px-2 py-1 bg-muted rounded">Ctrl/⌘ + R</kbd>
-            <span>to record</span>
-            <kbd className="px-2 py-1 bg-muted rounded">Ctrl/⌘ + Enter</kbd>
-            <span>to send message</span>
+    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-background">
+      {/* Header section: left-aligned, smaller title and summary */}
+      <div className="w-full max-w-6xl mx-auto pt-8 pb-4">
+        <h1 className="text-lg font-bold leading-tight mb-1">Speech Synthesis</h1>
+        <p className="text-sm text-muted-foreground">Unleash the power of our cutting-edge technology to generate realistic, captivating speech in a wide range of languages.</p>
+      </div>
+      <Card className="w-full max-w-4xl mx-auto rounded-2xl shadow-xl border bg-background/80 p-0">
+        {/* Tabs and Quota Row */}
+        <div className="flex items-center justify-between px-12 pt-12 pb-2 border-b">
+          {/* Tabs */}
+          <div className="flex gap-6">
+            <Button variant="ghost" className="text-base font-semibold border-b-2 border-primary rounded-none cursor-default">Text to Speech</Button>
           </div>
+          {/* Quota Info */}
+          <div className="text-sm text-muted-foreground">Quota remaining: {quota.toLocaleString()}</div>
         </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-2 w-full max-w-md mx-auto mb-8">
-            <TabsTrigger value="voice-chat" className="flex items-center gap-2" aria-label="Voice Chat Tab">
-              <Mic className="h-4 w-4" />
-              <span>Voice Chat</span>
-            </TabsTrigger>
-            <TabsTrigger value="voice-settings" className="flex items-center gap-2" aria-label="Voice Settings Tab">
-              <Speaker className="h-4 w-4" />
-              <span>Voice Settings</span>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="voice-chat" className="space-y-8">
-            <Card className="w-full">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Your Input
-                  {emotion && (
-                    <Badge variant="outline" className="ml-2">
-                      {emotionEmoji[emotion]} {emotion}
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>Choose a voice personality or start typing</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {voicePersonalities.map((voice) => (
-                    <Button
-                      key={voice.id}
-                      variant={selectedVoice === voice.id ? "default" : "outline"}
-                      className={cn(
-                        "h-auto flex flex-col items-center p-4 space-y-2 relative",
-                        selectedVoice === voice.id && "ring-2 ring-primary"
-                      )}
-                      onClick={async () => {
-                        setSelectedVoice(voice.id);
-                        setIsProcessing(true);
-                        try {
-                          // Generate a random sample type
-                          const sampleTypes = ["general", "storytelling", "professional", "creative"];
-                          const randomType = sampleTypes[Math.floor(Math.random() * sampleTypes.length)];
-                          
-                          let sampleText = "";
-                          
-                          // Custom samples for each voice type
-                          const samples = {
-                            alloy: "Welcome! I specialize in clear, professional communication. Let me demonstrate my versatile voice.",
-                            echo: "Hey there! I love adding excitement and personality to every word. Let me show you my expressive style!",
-                            fable: "Hello friend! Let me share a warm and gentle story that will make you smile.",
-                            nova: "Get ready for an energetic experience! I bring dynamism and excitement to every interaction!",
-                            onyx: "Greetings. Allow me to demonstrate my authoritative and commanding presence.",
-                            shimmer: "Welcome. I excel in delivering precise and professional communication with clarity."
-                          };
-
-                          sampleText = samples[voice.id as keyof typeof samples] || samples.alloy;
-
-                          const { audioUrl } = await generateSpeech(sampleText, voice.id, voiceSpeed);
-                          setAiAudioUrl(audioUrl);
-                          setAiResponse(sampleText);
-
-                          toast({
-                            title: `${voice.name} Selected`,
-                            description: "Sample generated successfully.",
-                          });
-                        } catch (error) {
-                          console.error("Error:", error);
-                          toast({
-                            title: "Error",
-                            description: "Failed to generate voice sample",
-                            variant: "destructive"
-                          });
-                        } finally {
-                          setIsProcessing(false);
-                        }
-                      }}
-                      disabled={isProcessing}
-                    >
-                      <div className="relative">
-                        {voice.icon}
-                        {isProcessing && selectedVoice === voice.id && (
-                          <motion.div
-                            className="absolute inset-0 flex items-center justify-center"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                          >
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          </motion.div>
-                        )}
-                      </div>
-                      <span className="font-medium">{voice.name}</span>
-                      <span className="text-xs text-muted-foreground text-center">
-                        {voice.description}
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="space-y-4">
-                  <textarea
-                    className="w-full min-h-[200px] p-4 rounded-md border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                    value={textInput}
-                    onChange={(e) => setTextInput(e.target.value)}
-                    placeholder="Type your message here..."
-                    disabled={isProcessing}
-                  />
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      {characterCount}/4000 characters
-                    </div>
+        {/* Textarea */}
+        <div className="px-12 pt-12 pb-6">
+          <textarea
+            className="w-full min-h-[300px] text-xl p-8 rounded-lg border-2 border-muted bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            value={textInput}
+            onChange={e => setTextInput(e.target.value)}
+            placeholder="Type or paste your text here..."
+            disabled={isProcessing}
+          />
+        </div>
+        {/* Bottom Controls Row */}
+        <div className="flex items-center justify-between px-12 pb-8 pt-2">
+          {/* Left: Voice Dropdown and Settings */}
+          <div className="flex items-center gap-3">
+            <Select
+              value={selectedVoice}
+              onValueChange={setSelectedVoice}
+              aria-label="Select AI voice"
+            >
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder="Select a voice" />
+              </SelectTrigger>
+              <SelectContent>
+                {voicePersonalities.map((voice) => (
+                  <SelectItem key={voice.id} value={voice.id}>
                     <div className="flex items-center gap-2">
-                      <VoiceRecorder
-                        onRecordingComplete={handleRecordingComplete}
-                        isProcessing={isProcessing}
-                      />
-                      <Button
-                        onClick={handleTextSubmit}
-                        disabled={isProcessing || !textInput.trim()}
-                        className="flex items-center gap-2"
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ArrowRight className="h-4 w-4" />
-                        )}
-                        Send
-                      </Button>
+                      {voice.icon}
+                      <span>{voice.name} - {voice.description}</span>
                     </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="px-6">Settings</Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="max-w-md w-full">
+                <SheetHeader>
+                  <SheetTitle>Settings</SheetTitle>
+                </SheetHeader>
+                {/* Model Info Card */}
+                <div className="rounded-lg border bg-muted p-4 mb-6">
+                  <div className="font-semibold mb-1">{modelInfo.name}</div>
+                  <div className="text-sm text-muted-foreground mb-2">{modelInfo.description}</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {modelInfo.languages.map(lang => (
+                      <Badge key={lang} variant="secondary">{lang}</Badge>
+                    ))}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            {(aiResponse || messages.length > 0) && (
-              <Card className="w-full">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bot className="h-5 w-5" />
-                    AI Response
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {aiAudioUrl && (
-                    <div className="p-4 bg-muted rounded-lg">
-                      <div className="flex items-center gap-4 mb-4">
-                        {selectedVoice && voicePersonalities.find(v => v.id === selectedVoice)?.icon}
-                        <div>
-                          <h4 className="font-medium">
-                            {voicePersonalities.find(v => v.id === selectedVoice)?.name}
-                          </h4>
-                          <p className="text-sm text-muted-foreground">
-                            {voicePersonalities.find(v => v.id === selectedVoice)?.description}
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="ml-auto">
-                          {selectedLanguage}
-                        </Badge>
-                      </div>
-                      <div className="space-y-4">
-                        <audio 
-                          ref={aiAudioRef} 
-                          src={aiAudioUrl} 
-                          className="w-full" 
-                          controls 
-                          onPlay={() => setIsPlayingAI(true)}
-                          onPause={() => setIsPlayingAI(false)}
-                          onEnded={() => setIsPlayingAI(false)}
-                        />
-                        <div className="bg-background/50 p-4 rounded-md">
-                          <p className="text-sm leading-relaxed">{aiResponse}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {messages.length > 0 && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-medium">Conversation History</h3>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={clearConversation}
-                          className="flex items-center gap-2"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Clear
-                        </Button>
-                      </div>
-                      <div className="space-y-4 max-h-[500px] overflow-y-auto">
-                        {messages.map((msg, index) => (
-                          <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className={cn(
-                              "p-4 rounded-lg",
-                              msg.role === "user" ? "bg-muted" : "bg-primary/10"
-                            )}
-                          >
-                            <div className="flex items-center gap-2 mb-2">
-                              {msg.role === "user" ? (
-                                <User className="h-4 w-4" />
-                              ) : (
-                                <Bot className="h-4 w-4" />
-                              )}
-                              <span className="text-sm font-medium">
-                                {msg.role === "user" ? "You" : "AI"}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(msg.timestamp), "HH:mm")}
-                              </span>
-                            </div>
-                            <p className="text-sm">{msg.content}</p>
-                            {msg.audioUrl && (
-                              <audio src={msg.audioUrl} className="mt-2 w-full" controls />
-                            )}
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="voice-settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Voice Customization</CardTitle>
-                <CardDescription>Adjust how the AI voice sounds</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <Label htmlFor="voice-model">Voice</Label>
-                      <Select value={selectedVoice} onValueChange={(value) => {
-                        setSelectedVoice(value);
-                        // Set first available language for the new voice
-                        const availableLanguages = voiceExamples[value as keyof typeof voiceExamples].languages;
-                        if (!availableLanguages.includes(selectedLanguage)) {
-                          setSelectedLanguage(availableLanguages[0]);
-                        }
-                      }} aria-label="Select AI voice">
-                        <SelectTrigger id="voice-model">
-                          <SelectValue placeholder="Select a voice" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="alloy">
-                            <div className="flex items-center gap-2">
-                              <Mic className="h-4 w-4" />
-                              <span>Alloy - Neutral & Versatile</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="echo">
-                            <div className="flex items-center gap-2">
-                              <Bot className="h-4 w-4" />
-                              <span>Echo - Expressive & Engaging</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="fable">
-                            <div className="flex items-center gap-2">
-                              <Speaker className="h-4 w-4" />
-                              <span>Fable - Warm & Friendly</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="onyx">
-                            <div className="flex items-center gap-2">
-                              <Bot className="h-4 w-4" />
-                              <span>Onyx - Deep & Authoritative</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="nova">
-                            <div className="flex items-center gap-2">
-                              <Speaker className="h-4 w-4" />
-                              <span>Nova - Energetic & Bright</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="shimmer">
-                            <div className="flex items-center gap-2">
-                              <Mic className="h-4 w-4" />
-                              <span>Shimmer - Clear & Professional</span>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex-1">
-                      <Label htmlFor="language">Language</Label>
-                      {voiceExamples[selectedVoice as keyof typeof voiceExamples] ? (
-                        <Select 
-                          value={selectedLanguage} 
-                          onValueChange={setSelectedLanguage}
-                          aria-label="Select voice language"
-                        >
-                          <SelectTrigger id="language">
-                            <SelectValue placeholder="Select a language" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {voiceExamples[selectedVoice as keyof typeof voiceExamples].languages.map((lang) => (
-                              <SelectItem key={lang} value={lang}>
-                                <div className="flex items-center gap-2">
-                                  <span>{lang}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <div className="text-sm text-destructive">Voice not found.</div>
-                      )}
-                    </div>
+                {/* Sliders */}
+                <div className="mb-4">
+                  <div className="mb-2 flex justify-between text-sm font-medium">
+                    <span>Stability</span>
+                    <span className="text-muted-foreground">{stability}%</span>
                   </div>
-
-                  <Card className="mt-4 bg-muted/50">
-                    <CardContent className="pt-6">
-                      <div className="space-y-4">
-                        <div className="flex flex-col gap-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">Languages:</span>
-                            <div className="flex gap-2">
-                              {voiceExamples[selectedVoice as keyof typeof voiceExamples]
-                                ? voiceExamples[selectedVoice as keyof typeof voiceExamples].languages.map((lang, index) => (
-                                    <Badge key={index} variant="secondary">{lang}</Badge>
-                                  ))
-                                : <span className="text-sm text-destructive">Voice not found.</span>
-                              }
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col gap-2">
-                            <span className="font-medium text-sm">Specialties:</span>
-                            <div className="flex flex-wrap gap-2">
-                              {voiceExamples[selectedVoice as keyof typeof voiceExamples].specialties.map((specialty, index) => (
-                                <Badge key={index} variant="outline">{specialty}</Badge>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="space-y-4 mt-4">
-                            {voiceExamples[selectedVoice as keyof typeof voiceExamples].samples[selectedLanguage].map((sample, index) => (
-                              <div key={index} className="space-y-2">
-                                <p className="text-sm font-medium capitalize">{sample.type}:</p>
-                                <p className="text-sm leading-6 p-3 bg-background/50 rounded-md" dir={selectedVoice === "shimmer" ? "rtl" : "ltr"}>
-                                  {sample.text}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="speed">Speech Speed: {voiceSpeed.toFixed(1)}x</Label>
-                    </div>
-                    <Slider
-                      id="speed"
-                      min={0.5}
-                      max={2.0}
-                      step={0.1}
-                      value={[voiceSpeed]}
-                      onValueChange={(values: number[]) => setVoiceSpeed(values[0])}
-                      aria-label="Adjust speech speed"
-                    />
+                  <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>More variable</span>
+                    <span>More stable</span>
                   </div>
-
+                </div>
+                <div className="mb-4">
+                  <div className="mb-2 flex justify-between text-sm font-medium">
+                    <span>Similarity</span>
+                    <span className="text-muted-foreground">{similarity}%</span>
+                  </div>
+                  <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>Low</span>
+                    <span>High</span>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <div className="mb-2 flex justify-between text-sm font-medium">
+                    <span>Style Exaggeration</span>
+                    <span className="text-muted-foreground">{style}%</span>
+                  </div>
+                  <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>None</span>
+                    <span>Exaggerated</span>
+                  </div>
+                </div>
+                {/* Speaker Boost Toggle */}
+                <div className="flex items-center gap-3 mb-6">
+                  <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
+                  <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
+                </div>
+                <SheetFooter>
+                  <Button variant="outline" onClick={() => {
+                    setStability(80); setSimilarity(70); setStyle(0); setSpeakerBoost(false);
+                  }}>Reset</Button>
                   <Button
-                    className="w-full mt-6"
                     onClick={async () => {
+                      if (!textInput.trim()) return;
                       setIsProcessing(true);
                       try {
-                        const sampleText = voiceExamples[selectedVoice as keyof typeof voiceExamples].samples[selectedLanguage].find(sample => sample.type === "general")?.text || "";
-                        const { audioUrl } = await generateSpeech(sampleText, selectedVoice, voiceSpeed);
-                        setAiAudioUrl(audioUrl);
-                        toast({ title: "Preview Generated", description: "Listen to the voice preview." });
+                        const { audioUrl: aiAudio } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
+                        setAiAudioUrl(aiAudio);
+                        toast({ title: "Success", description: "Speech generated from your input (via settings)." });
                       } catch (error) {
-                        console.error("Error generating preview:", error);
+                        console.error("Error generating speech:", error);
                         toast({
                           title: "Error",
-                          description: "Failed to generate voice preview.",
+                          description: "Failed to generate speech. Please try again.",
                           variant: "destructive",
                         });
                       } finally {
                         setIsProcessing(false);
                       }
                     }}
-                    disabled={isProcessing}
-                    aria-label="Preview AI voice"
+                    disabled={isProcessing || !textInput.trim()}
                   >
-                    {isProcessing ? (
-                      <>
-                        <Speaker className="mr-2 h-4 w-4 animate-pulse" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Speaker className="mr-2 h-4 w-4" />
-                        Preview Voice
-                      </>
-                    )}
+                    Generate speech
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </motion.div>
-    </main>
+                </SheetFooter>
+              </SheetContent>
+            </Sheet>
+          </div>
+          {/* Right: Character count, Generate, Download */}
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">{textInput.length}/5000</span>
+            <Button
+              onClick={handleTextSubmit}
+              disabled={isProcessing || !textInput.trim()}
+              className="flex items-center gap-2 h-12 px-6 text-base"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="h-4 w-4" />
+              )}
+              Generate speech
+            </Button>
+            {aiAudioUrl && (
+              <Button
+                onClick={() => downloadAudio(aiAudioUrl, "tts-audio.wav")}
+                variant="outline"
+                className="flex items-center justify-center h-12 w-12 p-0"
+                disabled={!aiAudioUrl}
+                aria-label="Download audio"
+              >
+                <Download className="h-5 w-5" />
+              </Button>
+            )}
+            <audio
+              ref={aiAudioRef}
+              src={aiAudioUrl}
+              style={{ display: 'none' }}
+            />
+          </div>
+        </div>
+      </Card>
+    </div>
   );
 }
 

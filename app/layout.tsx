@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { inter } from '@/lib/fonts';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
-import { Header } from '@/components/layout/header';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
@@ -32,8 +32,8 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="relative flex min-h-screen flex-col">
-            <Header />
+          <div className="relative flex min-h-screen flex-row">
+            <Sidebar />
             <div className="flex-1">{children}</div>
           </div>
           <Toaster />
