@@ -634,11 +634,13 @@ export default function Home() {
                 <Download className="h-5 w-5" />
               </Button>
             )}
-            <audio
-              ref={aiAudioRef}
-              src={aiAudioUrl}
-              style={{ display: 'none' }}
-            />
+            {aiAudioUrl && (
+              <audio
+                ref={aiAudioRef}
+                src={aiAudioUrl}
+                style={{ display: 'none' }}
+              />
+            )}
           </div>
         </div>
       </Card>
