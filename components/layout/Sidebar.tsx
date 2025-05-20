@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Mic, Bot, History, User, ChevronLeft, ChevronRight, CreditCard, Settings, BarChart } from "lucide-react";
+import { Mic, Bot, History, User, ChevronLeft, ChevronRight, CreditCard, Settings, BarChart, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "next-themes";
 
 const links = [
   {
@@ -42,6 +43,7 @@ const links = [
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
 
   return (
     <aside
@@ -50,7 +52,7 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-56"
       )}
     >
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-4 border-b gap-2">
         {!collapsed && (
           <span className="font-bold text-lg">Audra</span>
         )}
@@ -67,17 +69,27 @@ export function Sidebar() {
           const Icon = link.icon;
           const active = pathname === link.href;
           return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "flex items-center gap-4 px-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary",
-                active && "bg-muted text-primary font-semibold"
+            <div key={link.href}>
+              <Link
+                href={link.href}
+                className={cn(
+                  "flex items-center gap-4 px-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary",
+                  active && "bg-muted text-primary font-semibold"
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {!collapsed && <span className="text-base">{link.name}</span>}
+              </Link>
+              {!collapsed && link.name === "Profile" && (
+                <button
+                  className="flex items-center gap-4 px-4 py-2 rounded transition-colors hover:bg-muted text-muted-foreground hover:text-primary w-full"
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                >
+                  <Moon className="h-5 w-5" />
+                  <span className="text-base">Themes</span>
+                </button>
               )}
-            >
-              <Icon className="h-5 w-5" />
-              {!collapsed && <span className="text-base">{link.name}</span>}
-            </Link>
+            </div>
           );
         })}
       </nav>

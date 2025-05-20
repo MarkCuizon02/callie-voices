@@ -591,8 +591,8 @@ export default function Home() {
       {/* Header */}
       <header className="w-full flex items-center justify-between px-8 pt-8 pb-2 border-b border-muted">
         <div>
-          <h1 className="text-2xl font-bold leading-tight mb-1">Speech Synthesis</h1>
-          <p className="text-sm text-muted-foreground">Unleash the power of our cutting-edge technology to generate realistic, captivating speech in a wide range of languages.</p>
+          <h1 className="text-2xl font-bold leading-tight mb-1">Voice Synthesis Engine</h1>
+          <p className="text-sm text-muted-foreground">Unleash the power of advanced AI to generate natural, expressive speech from text—across languages, tones, and styles.</p>
         </div>
       </header>
       {/* Main Card */}
@@ -767,13 +767,15 @@ export default function Home() {
             </div>
           </div>
           {/* Hidden audio element */}
-          <audio
-            ref={aiAudioRef}
-            src={aiAudioUrl}
-            onEnded={() => setIsPlayingAI(false)}
-            onPause={() => setIsPlayingAI(false)}
-            onPlay={() => setIsPlayingAI(true)}
-          />
+          {aiAudioUrl && (
+            <audio
+              ref={aiAudioRef}
+              src={aiAudioUrl}
+              onEnded={() => setIsPlayingAI(false)}
+              onPause={() => setIsPlayingAI(false)}
+              onPlay={() => setIsPlayingAI(true)}
+            />
+          )}
         </div>
       </main>
     </div>
