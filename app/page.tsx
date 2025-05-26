@@ -22,6 +22,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter
 import { SpeakingWaveform } from "@/components/ui/SpeakingWaveform";
 import { generateSpeech as generateSpeechPreview } from "@/lib/openai";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { getElevenLabsVoices, generateElevenLabsSpeech } from "@/lib/elevenlabs";
 
 // Initialize OpenAI client with API key from environment variable
 const openai = new OpenAI({
@@ -110,6 +111,14 @@ const voicePersonalities: VoicePersonality[] = [
   }
 ];
 
+interface ElevenLabsVoice {
+  voice_id: string;
+  name: string;
+  category: string;
+  description: string;
+  preview_url: string;
+}
+
 // Transcription function using OpenAI Whisper API
 async function transcribeSpeech(audioBlob: Blob): Promise<string> {
   try {
@@ -177,6 +186,12 @@ const models = [
   { id: "openai", name: "OpenAI" },
   { id: "elevenlabs", name: "ElevenLabs" },
 ];
+
+// Helper to get icon for ElevenLabs voice (can be extended by category)
+function getElevenLabsVoiceIcon(category: string) {
+  // You can map category to different icons here if desired
+  return <Speaker className="h-5 w-5" />;
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("voice-chat");
@@ -348,14 +363,69 @@ export default function Home() {
   const [mainTab, setMainTab] = useState("generate");
   const [cardTab, setCardTab] = useState("text-to-speech");
   const [selectedModel, setSelectedModel] = useState("openai");
+  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
 
+  // Fetch ElevenLabs voices when model changes
+  useEffect(() => {
+    if (selectedModel === 'elevenlabs') {
+      setIsLoadingVoices(true);
+      getElevenLabsVoices()
+        .then(voices => {
+          setElevenLabsVoices(voices);
+          if (voices.length > 0) {
+            setSelectedVoice(voices[0].voice_id);
+          }
+        })
+        .catch(error => {
+          toast({
+            title: "Error",
+            description: "Failed to load ElevenLabs voices. Please try again.",
+            variant: "destructive",
+          });
+        })
+        .finally(() => {
+          setIsLoadingVoices(false);
+        });
+    } else if (selectedModel === 'openai') {
+      setIsLoadingVoices(true);
+      setTimeout(() => {
+        setSelectedVoice(voicePersonalities[0].id);
+        setIsLoadingVoices(false);
+      }, 300);
+    }
+  }, [selectedModel]);
+
+  // Update handleTextSubmit to handle both models
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
     setIsProcessing(true);
     try {
-      // Generate speech and get duration
-      const { audioUrl: aiAudio, duration } = await generateSpeech(textInput, selectedVoice, voiceSpeed);
-      
+      let audioUrl: string;
+      let duration: number;
+
+      if (selectedModel === 'elevenlabs') {
+        const result = await generateElevenLabsSpeech(
+          textInput,
+          selectedVoice,
+          stability,
+          similarity,
+          style
+        );
+        audioUrl = result.audioUrl;
+        // Create a temporary audio element to get duration
+        const audio = new Audio(audioUrl);
+        duration = await new Promise<number>((resolve) => {
+          audio.addEventListener('loadedmetadata', () => {
+            resolve(audio.duration);
+          });
+        });
+      } else {
+        const result = await generateSpeech(textInput, selectedVoice, voiceSpeed);
+        audioUrl = result.audioUrl;
+        duration = result.duration;
+      }
+
       // Calculate credits used (2 credits per 15 seconds, rounded up)
       const creditsUsed = Math.ceil((duration / 15) * 2);
       
@@ -378,8 +448,7 @@ export default function Home() {
         aiAudioRef.current.pause();
         aiAudioRef.current.currentTime = 0;
       }
-      setAiAudioUrl(aiAudio);
-      // The useEffect on aiAudioUrl will handle playback
+      setAiAudioUrl(audioUrl);
       
       toast({ 
         title: "Success", 
@@ -549,7 +618,26 @@ export default function Home() {
     }
     setPreviewingVoice(voiceId);
     try {
-      const { audioUrl } = await generateSpeechPreview("This is a sample of the selected voice.", voiceId, 1.0);
+      let audioUrl: string;
+      if (selectedModel === "elevenlabs") {
+        // Use ElevenLabs preview
+        const result = await generateElevenLabsSpeech(
+          "This is a sample of the selected voice.",
+          voiceId,
+          stability,
+          similarity,
+          style
+        );
+        audioUrl = result.audioUrl;
+      } else {
+        // Use OpenAI preview
+        const result = await generateSpeechPreview(
+          "This is a sample of the selected voice.",
+          voiceId,
+          1.0
+        );
+        audioUrl = result.audioUrl;
+      }
       const audio = new Audio(audioUrl);
       setPreviewAudio(audio);
       audio.onended = () => setPreviewingVoice(null);
@@ -591,6 +679,88 @@ export default function Home() {
     }
     setIsPlayingAI(false);
   }, [selectedVoice]);
+
+  // Update voice selection UI
+  const renderVoiceSelector = () => {
+    if (selectedModel === 'elevenlabs') {
+      return (
+        <Select
+          value={selectedVoice}
+          onValueChange={setSelectedVoice}
+          aria-label="Select ElevenLabs voice"
+          disabled={isLoadingVoices}
+        >
+          <SelectTrigger className="w-64">
+            <div className="flex items-center gap-2 w-full">
+              <span className="flex items-center justify-center h-5 w-5">
+                {(() => {
+                  const v = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
+                  return v ? getElevenLabsVoiceIcon(v.category) : <Speaker className="h-5 w-5" />;
+                })()}
+              </span>
+              <span className="truncate max-w-full">
+                {isLoadingVoices
+                  ? "Loading voices..."
+                  : elevenLabsVoices.find(v => v.voice_id === selectedVoice)
+                    ? `${elevenLabsVoices.find(v => v.voice_id === selectedVoice)?.name} - ${elevenLabsVoices.find(v => v.voice_id === selectedVoice)?.description || elevenLabsVoices.find(v => v.voice_id === selectedVoice)?.category || ""}`
+                    : "Select a voice"}
+              </span>
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            {elevenLabsVoices.map((voice) => (
+              <SelectItem key={voice.voice_id} value={voice.voice_id}>
+                <div className="flex items-center gap-2 w-full">
+                  <span className="flex items-center justify-center h-5 w-5">
+                    {getElevenLabsVoiceIcon(voice.category)}
+                  </span>
+                  <span className="truncate max-w-full">{voice.name} - {voice.description || voice.category}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
+    return (
+      <Select
+        value={selectedVoice}
+        onValueChange={setSelectedVoice}
+        aria-label="Select OpenAI voice"
+        disabled={isLoadingVoices}
+      >
+        <SelectTrigger className="w-64">
+          <div className="flex items-center gap-2 w-full">
+            {isLoadingVoices ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              voicePersonalities.find(v => v.id === selectedVoice)?.icon
+            )}
+            <span className="truncate max-w-full">
+              {isLoadingVoices
+                ? "Loading voices..."
+                : voicePersonalities.find(v => v.id === selectedVoice)?.name +
+                  " - " +
+                  voicePersonalities.find(v => v.id === selectedVoice)?.description}
+            </span>
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          {voicePersonalities.map((voice) => (
+            <SelectItem key={voice.id} value={voice.id}>
+              <div className="flex items-center gap-2 w-full">
+                {voice.icon}
+                <span className="truncate max-w-full">
+                  {voice.name} - {voice.description}
+                </span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  };
 
   return (
     <div className="min-h-screen w-full flex flex-col bg-background">
@@ -653,30 +823,7 @@ export default function Home() {
           <div className="flex items-center justify-between px-8 pb-8 pt-2 gap-4 flex-wrap">
             {/* Voice selector and settings */}
             <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              <Select
-                value={selectedVoice}
-                onValueChange={setSelectedVoice}
-                aria-label="Select AI voice"
-              >
-                <SelectTrigger className="w-64">
-                  <div className="flex items-center gap-2 w-full">
-                    {voicePersonalities.find(v => v.id === selectedVoice)?.icon}
-                    <span className="truncate max-w-full">
-                      {voicePersonalities.find(v => v.id === selectedVoice)?.name} - {voicePersonalities.find(v => v.id === selectedVoice)?.description}
-                    </span>
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {voicePersonalities.map((voice) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      <div className="flex items-center gap-2 w-full">
-                        {voice.icon}
-                        <span className="truncate max-w-full">{voice.name} - {voice.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {renderVoiceSelector()}
               {previewingVoice === selectedVoice ? (
                 <Loader2 className="h-5 w-5 animate-spin text-primary ml-2" />
               ) : (
