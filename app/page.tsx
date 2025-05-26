@@ -193,6 +193,16 @@ function getElevenLabsVoiceIcon(category: string) {
   return <Speaker className="h-5 w-5" />;
 }
 
+// Update the GPT prompt for conciseness
+async function generateSampleTextForVoice(voiceName: string, description: string) {
+  const prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the \"${voiceName}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+  });
+  return response.choices[0]?.message?.content || "";
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState("voice-chat");
   const [isRecording, setIsRecording] = useState(false);
@@ -268,7 +278,7 @@ export default function Home() {
         ],
         Korean: [
           { type: "gaming", text: "플레이어 원, 당신의 모험이 지금 시작됩니다! 현명하게 길을 선택하세요..." },
-          { type: "general", text: "안녕하세요! 저는 노바입니다. 모든 상호작용에 에너지와 흥분을 불어넀습니다!" },
+          { type: "general", text: "안녕하세요! 저는 노바입니다. 모든 상호작용에 에너지와 흥분을 불어넹습니다!" },
           { type: "dynamic", text: "3... 2... 1... 파티를 시작합시다!" }
         ]
       },
@@ -358,13 +368,13 @@ export default function Home() {
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [typewriterIndex, setTypewriterIndex] = useState(0);
-  const autoText = "This is a sample text for voice synthesis engine. You can edit or replace it!";
-  const [mode, setMode] = useState("simple");
-  const [mainTab, setMainTab] = useState("generate");
-  const [cardTab, setCardTab] = useState("text-to-speech");
+  // Store the latest GPT-generated text for animation
+  const [gptGeneratedText, setGptGeneratedText] = useState("");
+  // FIX: Move these useState hooks to the top
   const [selectedModel, setSelectedModel] = useState("openai");
   const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [cardTab, setCardTab] = useState("text-to-speech");
 
   // Fetch ElevenLabs voices when model changes
   useEffect(() => {
@@ -653,23 +663,42 @@ export default function Home() {
     }
   };
 
-  const handleAutoGenerateText = () => {
+  const handleAutoGenerateText = async () => {
     setIsAutoGenerating(true);
     setTypewriterIndex(0);
+    let voice, description;
+    if (selectedModel === 'elevenlabs') {
+      voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
+      description = voice ? voice.description || voice.category : "";
+    } else {
+      voice = voicePersonalities.find(v => v.id === selectedVoice);
+      description = voice ? voice.description : "";
+    }
+    try {
+      const aiText = await generateSampleTextForVoice(voice?.name || "", description);
+      setGptGeneratedText(aiText);
+      setTypewriterIndex(0);
+      setTextInput(""); // Clear before animating
+    } catch (e) {
+      setGptGeneratedText("");
+      setTextInput("Failed to generate sample text. Please try again.");
+      setIsAutoGenerating(false);
+    }
   };
 
+  // Animate the appearance of the GPT-generated text
   useEffect(() => {
-    if (isAutoGenerating && typewriterIndex <= autoText.length) {
+    if (isAutoGenerating && gptGeneratedText && typewriterIndex <= gptGeneratedText.length) {
       const timeout = setTimeout(() => {
-        setTextInput(autoText.slice(0, typewriterIndex));
+        setTextInput(gptGeneratedText.slice(0, typewriterIndex));
         setTypewriterIndex(typewriterIndex + 1);
       }, 18);
-      if (typewriterIndex === autoText.length) {
+      if (typewriterIndex === gptGeneratedText.length) {
         setTimeout(() => setIsAutoGenerating(false), 300);
       }
       return () => clearTimeout(timeout);
     }
-  }, [isAutoGenerating, typewriterIndex]);
+  }, [isAutoGenerating, typewriterIndex, gptGeneratedText]);
 
   useEffect(() => {
     // Stop AI audio if playing when the voice is changed
@@ -678,6 +707,11 @@ export default function Home() {
       aiAudioRef.current.currentTime = 0;
     }
     setIsPlayingAI(false);
+    // Clear the text input, GPT-generated text, and reset animation state
+    setTextInput("");
+    setGptGeneratedText("");
+    setTypewriterIndex(0);
+    setIsAutoGenerating(false);
   }, [selectedVoice]);
 
   // Update voice selection UI
