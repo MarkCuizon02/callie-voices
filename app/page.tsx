@@ -664,8 +664,13 @@ export default function Home() {
   };
 
   const handleAutoGenerateText = async () => {
-    setIsAutoGenerating(true);
+    // Stop any running animation and clear text
+    setIsAutoGenerating(false);
     setTypewriterIndex(0);
+    setTextInput("");
+    setGptGeneratedText("");
+
+    setIsAutoGenerating(true);
     let voice, description;
     if (selectedModel === 'elevenlabs') {
       voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
@@ -674,8 +679,20 @@ export default function Home() {
       voice = voicePersonalities.find(v => v.id === selectedVoice);
       description = voice ? voice.description : "";
     }
+
+    let prompt;
+    if (textInput.trim()) {
+      prompt = `Improve or rewrite the following text to best demonstrate the \"${voice?.name}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice. Here is the text: ${textInput}`;
+    } else {
+      prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the \"${voice?.name}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
+    }
+
     try {
-      const aiText = await generateSampleTextForVoice(voice?.name || "", description);
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+      });
+      const aiText = response.choices[0]?.message?.content || "";
       setGptGeneratedText(aiText);
       setTypewriterIndex(0);
       setTextInput(""); // Clear before animating
