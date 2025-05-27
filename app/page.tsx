@@ -193,6 +193,16 @@ function getElevenLabsVoiceIcon(category: string) {
   return <Speaker className="h-5 w-5" />;
 }
 
+// Update the GPT prompt for conciseness
+async function generateSampleTextForVoice(voiceName: string, description: string) {
+  const prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the \"${voiceName}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+  });
+  return response.choices[0]?.message?.content || "";
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState("voice-chat");
   const [isRecording, setIsRecording] = useState(false);
@@ -268,7 +278,7 @@ export default function Home() {
         ],
         Korean: [
           { type: "gaming", text: "플레이어 원, 당신의 모험이 지금 시작됩니다! 현명하게 길을 선택하세요..." },
-          { type: "general", text: "안녕하세요! 저는 노바입니다. 모든 상호작용에 에너지와 흥분을 불어넀습니다!" },
+          { type: "general", text: "안녕하세요! 저는 노바입니다. 모든 상호작용에 에너지와 흥분을 불어넹습니다!" },
           { type: "dynamic", text: "3... 2... 1... 파티를 시작합시다!" }
         ]
       },
@@ -358,13 +368,13 @@ export default function Home() {
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [typewriterIndex, setTypewriterIndex] = useState(0);
-  const autoText = "This is a sample text for voice synthesis engine. You can edit or replace it!";
-  const [mode, setMode] = useState("simple");
-  const [mainTab, setMainTab] = useState("generate");
-  const [cardTab, setCardTab] = useState("text-to-speech");
+  // Store the latest GPT-generated text for animation
+  const [gptGeneratedText, setGptGeneratedText] = useState("");
+  // FIX: Move these useState hooks to the top
   const [selectedModel, setSelectedModel] = useState("openai");
   const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+  const [cardTab, setCardTab] = useState("text-to-speech");
 
   // Fetch ElevenLabs voices when model changes
   useEffect(() => {
@@ -653,23 +663,59 @@ export default function Home() {
     }
   };
 
-  const handleAutoGenerateText = () => {
-    setIsAutoGenerating(true);
+  const handleAutoGenerateText = async () => {
+    // Stop any running animation and clear text
+    setIsAutoGenerating(false);
     setTypewriterIndex(0);
+    setTextInput("");
+    setGptGeneratedText("");
+
+    setIsAutoGenerating(true);
+    let voice, description;
+    if (selectedModel === 'elevenlabs') {
+      voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
+      description = voice ? voice.description || voice.category : "";
+    } else {
+      voice = voicePersonalities.find(v => v.id === selectedVoice);
+      description = voice ? voice.description : "";
+    }
+
+    let prompt;
+    if (textInput.trim()) {
+      prompt = `Improve or rewrite the following text to best demonstrate the \"${voice?.name}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice. Here is the text: ${textInput}`;
+    } else {
+      prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the \"${voice?.name}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
+    }
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+      });
+      const aiText = response.choices[0]?.message?.content || "";
+      setGptGeneratedText(aiText);
+      setTypewriterIndex(0);
+      setTextInput(""); // Clear before animating
+    } catch (e) {
+      setGptGeneratedText("");
+      setTextInput("Failed to generate sample text. Please try again.");
+      setIsAutoGenerating(false);
+    }
   };
 
+  // Animate the appearance of the GPT-generated text
   useEffect(() => {
-    if (isAutoGenerating && typewriterIndex <= autoText.length) {
+    if (isAutoGenerating && gptGeneratedText && typewriterIndex <= gptGeneratedText.length) {
       const timeout = setTimeout(() => {
-        setTextInput(autoText.slice(0, typewriterIndex));
+        setTextInput(gptGeneratedText.slice(0, typewriterIndex));
         setTypewriterIndex(typewriterIndex + 1);
       }, 18);
-      if (typewriterIndex === autoText.length) {
+      if (typewriterIndex === gptGeneratedText.length) {
         setTimeout(() => setIsAutoGenerating(false), 300);
       }
       return () => clearTimeout(timeout);
     }
-  }, [isAutoGenerating, typewriterIndex]);
+  }, [isAutoGenerating, typewriterIndex, gptGeneratedText]);
 
   useEffect(() => {
     // Stop AI audio if playing when the voice is changed
@@ -678,6 +724,11 @@ export default function Home() {
       aiAudioRef.current.currentTime = 0;
     }
     setIsPlayingAI(false);
+    // Clear the text input, GPT-generated text, and reset animation state
+    setTextInput("");
+    setGptGeneratedText("");
+    setTypewriterIndex(0);
+    setIsAutoGenerating(false);
   }, [selectedVoice]);
 
   // Update voice selection UI
@@ -761,6 +812,28 @@ export default function Home() {
       </Select>
     );
   };
+
+  useEffect(() => {
+    if (selectedModel === "openai") {
+      const voice = voicePersonalities.find(v => v.id === selectedVoice);
+      if (voice) {
+        setModelInfo({
+          name: voice.name,
+          description: voice.description,
+          languages: voiceExamples[voice.id]?.languages || ["English"],
+        });
+      }
+    } else if (selectedModel === "elevenlabs") {
+      const voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
+      if (voice) {
+        setModelInfo({
+          name: voice.name,
+          description: voice.description || voice.category,
+          languages: ["See ElevenLabs docs"], // Or use real data if available
+        });
+      }
+    }
+  }, [selectedModel, selectedVoice, elevenLabsVoices]);
 
   return (
     <div className="min-h-screen w-full flex flex-col bg-background">
@@ -856,48 +929,73 @@ export default function Home() {
                       ))}
                     </div>
                   </div>
-                  {/* Sliders */}
-                  <div className="mb-4">
-                    <div className="mb-2 flex justify-between text-sm font-medium">
-                      <span>Stability</span>
-                      <span className="text-muted-foreground">{stability}%</span>
+                  {/* Sliders and toggles for ElevenLabs */}
+                  {selectedModel === 'elevenlabs' && (
+                    <>
+                      <div className="mb-4">
+                        <div className="mb-2 flex justify-between text-sm font-medium">
+                          <span>Stability</span>
+                          <span className="text-muted-foreground">{stability}%</span>
+                        </div>
+                        <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>More variable</span>
+                          <span>More stable</span>
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <div className="mb-2 flex justify-between text-sm font-medium">
+                          <span>Similarity</span>
+                          <span className="text-muted-foreground">{similarity}%</span>
+                        </div>
+                        <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>Low</span>
+                          <span>High</span>
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <div className="mb-2 flex justify-between text-sm font-medium">
+                          <span>Style Exaggeration</span>
+                          <span className="text-muted-foreground">{style}%</span>
+                        </div>
+                        <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>None</span>
+                          <span>Exaggerated</span>
+                        </div>
+                      </div>
+                      {/* Speaker Boost Toggle */}
+                      <div className="flex items-center gap-3 mb-6">
+                        <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
+                        <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
+                      </div>
+                    </>
+                  )}
+                  {/* Speed slider for OpenAI */}
+                  {selectedModel === 'openai' && (
+                    <div className="mb-4">
+                      <div className="mb-2 flex justify-between text-sm font-medium">
+                        <span>Speed</span>
+                        <span className="text-muted-foreground">{voiceSpeed.toFixed(2)}x</span>
+                      </div>
+                      <Slider min={0.5} max={2.0} step={0.01} value={[voiceSpeed]} onValueChange={v => setVoiceSpeed(v[0])} />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>0.5x</span>
+                        <span>2.0x</span>
+                      </div>
                     </div>
-                    <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>More variable</span>
-                      <span>More stable</span>
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <div className="mb-2 flex justify-between text-sm font-medium">
-                      <span>Similarity</span>
-                      <span className="text-muted-foreground">{similarity}%</span>
-                    </div>
-                    <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>Low</span>
-                      <span>High</span>
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <div className="mb-2 flex justify-between text-sm font-medium">
-                      <span>Style Exaggeration</span>
-                      <span className="text-muted-foreground">{style}%</span>
-                    </div>
-                    <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>None</span>
-                      <span>Exaggerated</span>
-                    </div>
-                  </div>
-                  {/* Speaker Boost Toggle */}
-                  <div className="flex items-center gap-3 mb-6">
-                    <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
-                    <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
-                  </div>
+                  )}
                   <SheetFooter>
                     <Button variant="outline" onClick={() => {
-                      setStability(80); setSimilarity(70); setStyle(0); setSpeakerBoost(false);
+                      if (selectedModel === "openai") {
+                        setVoiceSpeed(1.0);
+                      } else {
+                        setStability(80);
+                        setSimilarity(70);
+                        setStyle(0);
+                        setSpeakerBoost(false);
+                      }
                     }}>Reset</Button>
                   </SheetFooter>
                 </SheetContent>

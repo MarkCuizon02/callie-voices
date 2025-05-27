@@ -18,11 +18,6 @@ const playgroundLinks = [
     href: "/voice-changer",
     icon: Volume2
   },
-  {
-    name: "Sound Effects",
-    href: "/sound-effects",
-    icon: Music2
-  }
 ];
 
 export function Sidebar() {
