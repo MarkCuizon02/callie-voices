@@ -813,6 +813,28 @@ export default function Home() {
     );
   };
 
+  useEffect(() => {
+    if (selectedModel === "openai") {
+      const voice = voicePersonalities.find(v => v.id === selectedVoice);
+      if (voice) {
+        setModelInfo({
+          name: voice.name,
+          description: voice.description,
+          languages: voiceExamples[voice.id]?.languages || ["English"],
+        });
+      }
+    } else if (selectedModel === "elevenlabs") {
+      const voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
+      if (voice) {
+        setModelInfo({
+          name: voice.name,
+          description: voice.description || voice.category,
+          languages: ["See ElevenLabs docs"], // Or use real data if available
+        });
+      }
+    }
+  }, [selectedModel, selectedVoice, elevenLabsVoices]);
+
   return (
     <div className="min-h-screen w-full flex flex-col bg-background">
       {/* Header */}
@@ -907,48 +929,73 @@ export default function Home() {
                       ))}
                     </div>
                   </div>
-                  {/* Sliders */}
-                  <div className="mb-4">
-                    <div className="mb-2 flex justify-between text-sm font-medium">
-                      <span>Stability</span>
-                      <span className="text-muted-foreground">{stability}%</span>
+                  {/* Sliders and toggles for ElevenLabs */}
+                  {selectedModel === 'elevenlabs' && (
+                    <>
+                      <div className="mb-4">
+                        <div className="mb-2 flex justify-between text-sm font-medium">
+                          <span>Stability</span>
+                          <span className="text-muted-foreground">{stability}%</span>
+                        </div>
+                        <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>More variable</span>
+                          <span>More stable</span>
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <div className="mb-2 flex justify-between text-sm font-medium">
+                          <span>Similarity</span>
+                          <span className="text-muted-foreground">{similarity}%</span>
+                        </div>
+                        <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>Low</span>
+                          <span>High</span>
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <div className="mb-2 flex justify-between text-sm font-medium">
+                          <span>Style Exaggeration</span>
+                          <span className="text-muted-foreground">{style}%</span>
+                        </div>
+                        <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>None</span>
+                          <span>Exaggerated</span>
+                        </div>
+                      </div>
+                      {/* Speaker Boost Toggle */}
+                      <div className="flex items-center gap-3 mb-6">
+                        <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
+                        <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
+                      </div>
+                    </>
+                  )}
+                  {/* Speed slider for OpenAI */}
+                  {selectedModel === 'openai' && (
+                    <div className="mb-4">
+                      <div className="mb-2 flex justify-between text-sm font-medium">
+                        <span>Speed</span>
+                        <span className="text-muted-foreground">{voiceSpeed.toFixed(2)}x</span>
+                      </div>
+                      <Slider min={0.5} max={2.0} step={0.01} value={[voiceSpeed]} onValueChange={v => setVoiceSpeed(v[0])} />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>0.5x</span>
+                        <span>2.0x</span>
+                      </div>
                     </div>
-                    <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>More variable</span>
-                      <span>More stable</span>
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <div className="mb-2 flex justify-between text-sm font-medium">
-                      <span>Similarity</span>
-                      <span className="text-muted-foreground">{similarity}%</span>
-                    </div>
-                    <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>Low</span>
-                      <span>High</span>
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <div className="mb-2 flex justify-between text-sm font-medium">
-                      <span>Style Exaggeration</span>
-                      <span className="text-muted-foreground">{style}%</span>
-                    </div>
-                    <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>None</span>
-                      <span>Exaggerated</span>
-                    </div>
-                  </div>
-                  {/* Speaker Boost Toggle */}
-                  <div className="flex items-center gap-3 mb-6">
-                    <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
-                    <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
-                  </div>
+                  )}
                   <SheetFooter>
                     <Button variant="outline" onClick={() => {
-                      setStability(80); setSimilarity(70); setStyle(0); setSpeakerBoost(false);
+                      if (selectedModel === "openai") {
+                        setVoiceSpeed(1.0);
+                      } else {
+                        setStability(80);
+                        setSimilarity(70);
+                        setStyle(0);
+                        setSpeakerBoost(false);
+                      }
                     }}>Reset</Button>
                   </SheetFooter>
                 </SheetContent>
