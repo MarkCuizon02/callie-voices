@@ -1,364 +1,105 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import OpenAI from "openai";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { VoiceRecorder } from "@/components/voice-recorder";
-import { Waveform } from "@/components/ui/waveform";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/use-toast";
-import { Mic, Speaker, Bot, ArrowRight, Download, Trash2, Play, Pause, Copy, Loader2, User, Smile, Frown, Meh, Angry, Sparkles } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { format } from "date-fns";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet";
-import { SpeakingWaveform } from "@/components/ui/SpeakingWaveform";
-import { generateSpeech as generateSpeechPreview } from "@/lib/openai";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { getElevenLabsVoices, generateElevenLabsSpeech } from "@/lib/elevenlabs";
+import { useState, useEffect, useRef } from 'react';
+import { Search, Download, Play, Loader2, Trash2, Volume2, Settings, Zap, Mic, Users, Star, ChevronDown, Filter, Upload, Sparkles, Bot, User, Speaker, List, Grid } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { SpeakingWaveform } from '@/components/ui/SpeakingWaveform';
+import { VoiceRecorder } from '@/components/voice-recorder';
+import { Waveform } from '@/components/ui/waveform';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { getOpenAIVoices, generateSpeech as generateOpenAISpeech } from '@/lib/openai';
+import { getElevenLabsVoices, generateElevenLabsSpeech } from '@/lib/elevenlabs';
 
-// Initialize OpenAI client with API key from environment variable
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true, // Allow client-side API calls
-});
-
-interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-  audioUrl?: string;
-  timestamp: string;
-}
-
-interface VoiceSample {
-  type: string;
-  text: string;
-}
-
-interface VoiceLanguageSamples {
-  [key: string]: VoiceSample[];
-}
-
-interface VoiceExample {
-  samples: VoiceLanguageSamples;
-  languages: string[];
-  specialties: string[];
-}
-
-interface VoiceExamples {
-  [key: string]: VoiceExample;
-}
-
-// Add this new interface for voice personality
-interface VoicePersonality {
+// Update the Voice interface to be a union type
+type Voice = {
   id: string;
   name: string;
-  description: string;
-  icon: JSX.Element;
-  prompt: string;
-}
-
-// Add this before the Home component
-const voicePersonalities: VoicePersonality[] = [
-  {
-    id: "alloy",
-    name: "Alloy",
-    description: "Neutral & Versatile",
-    icon: <Bot className="h-5 w-5" />,
-    prompt: "Generate a professional and balanced response that's clear and informative."
-  },
-  {
-    id: "echo",
-    name: "Echo",
-    description: "Expressive & Engaging",
-    icon: <Mic className="h-5 w-5" />,
-    prompt: "Create an enthusiastic and engaging response with a warm, friendly tone."
-  },
-  {
-    id: "fable",
-    name: "Fable",
-    description: "Warm & Friendly",
-    icon: <Speaker className="h-5 w-5" />,
-    prompt: "Create a warm and friendly response with a gentle, approachable tone."
-  },
-  {
-    id: "nova",
-    name: "Nova",
-    description: "Energetic & Bright",
-    icon: <Speaker className="h-5 w-5" />,
-    prompt: "Respond with high energy and excitement, perfect for dynamic content."
-  },
-  {
-    id: "onyx",
-    name: "Onyx",
-    description: "Deep & Authoritative",
-    icon: <User className="h-5 w-5" />,
-    prompt: "Provide an authoritative and professional response with gravitas."
-  },
-  {
-    id: "shimmer",
-    name: "Shimmer",
-    description: "Clear & Professional",
-    icon: <Bot className="h-5 w-5" />,
-    prompt: "Deliver a crisp, professional response focused on clarity and precision."
-  }
-];
-
-interface ElevenLabsVoice {
-  voice_id: string;
-  name: string;
   category: string;
-  description: string;
-  preview_url: string;
+  description?: string;
+  provider: 'openai' | 'elevenlabs';
+  gender: 'male' | 'female' | 'neutral';
+  accent?: string;
+  rating?: number;
+  usageCount?: number;
+  languages?: string[];
+  preview_url?: string;
+  stability?: number;
+  similarity?: number;
+  style?: number;
+  speaker_boost?: boolean;
+};
+
+// Helper function to check if voice is from OpenAI
+const isOpenAIVoice = (voice: Voice): voice is Voice & { provider: 'openai' } => {
+  return voice.provider === 'openai';
+};
+
+// Helper function to check if voice is from ElevenLabs
+const isElevenLabsVoice = (voice: Voice): voice is Voice & { provider: 'elevenlabs' } => {
+  return voice.provider === 'elevenlabs';
+};
+
+// Helper function to check if voice has rating
+const hasRating = (voice: Voice): voice is Voice & { rating: number } => {
+  return 'rating' in voice && voice.rating !== undefined;
+};
+
+// Helper function to check if voice has accent
+const hasAccent = (voice: Voice): voice is Voice & { accent: string } => {
+  return 'accent' in voice && voice.accent !== undefined;
+};
+
+// Helper function to check if voice has preview URL
+const hasPreviewUrl = (voice: Voice): voice is Voice & { preview_url: string } => {
+  return 'preview_url' in voice && voice.preview_url !== undefined;
+};
+
+// Helper function to check if voice has ElevenLabs specific settings
+const hasElevenLabsSettings = (voice: Voice): voice is Voice & { stability: number; similarity: number; style: number } => {
+  return isElevenLabsVoice(voice) && 'stability' in voice && 'similarity' in voice && 'style' in voice;
+};
+
+// Helper function to check if voice has usage count
+const hasUsageCount = (voice: Voice): voice is Voice & { usageCount: number } => {
+  return 'usageCount' in voice && voice.usageCount !== undefined;
+};
+
+interface Conversion {
+  id: string;
+  text: string;
+  voiceName: string;
+  audioUrl: string;
+  timestamp: string;
+  provider: string;
 }
 
-// Transcription function using OpenAI Whisper API
-async function transcribeSpeech(audioBlob: Blob): Promise<string> {
-  try {
-    const audioFile = new File([audioBlob], "recording.webm", { type: audioBlob.type });
-
-    const response = await openai.audio.transcriptions.create({
-      file: audioFile,
-      model: "whisper-1",
-    });
-
-    return response.text;
-  } catch (error) {
-    console.error("Transcription error:", error);
-    throw new Error("Failed to transcribe audio");
-  }
-}
-
-// Speech generation function using OpenAI TTS API
-async function generateSpeech(text: string, voice: string = "alloy", speed: number = 1.0): Promise<{ audioUrl: string; duration: number }> {
-  try {
-    const response = await openai.audio.speech.create({
-      model: "tts-1",
-      input: text,
-      voice: voice as any,
-      speed
-    });
-
-    const audioBlob = await response.blob();
-    const audioUrl = URL.createObjectURL(audioBlob);
-    
-    // Create a temporary audio element to get duration
-    const audio = new Audio(audioUrl);
-    const duration = await new Promise<number>((resolve) => {
-      audio.addEventListener('loadedmetadata', () => {
-        resolve(audio.duration);
-      });
-    });
-
-    return { audioUrl, duration };
-  } catch (error) {
-    console.error("Speech generation error:", error);
-    throw new Error("Failed to generate speech");
-  }
-}
-
-// Chat function using OpenAI Chat API
-async function chatWithAI(messages: Message[]): Promise<string> {
-  try {
-    const chatMessages = messages.map(({ role, content }) => ({ role, content }));
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: chatMessages as any, // Type cast to bypass strict typing
-    });
-
-    console.log("AI Response:", response); // Debugging log for AI response
-
-    return response.choices[0]?.message?.content || "";
-  } catch (error) {
-    console.error("Chat error:", error);
-    throw new Error("Failed to get AI response");
-  }
-}
-
-const models = [
-  { id: "openai", name: "OpenAI" },
-  { id: "elevenlabs", name: "ElevenLabs" },
-];
-
-// Helper to get icon for ElevenLabs voice (can be extended by category)
-function getElevenLabsVoiceIcon(category: string) {
-  // You can map category to different icons here if desired
-  return <Speaker className="h-5 w-5" />;
-}
-
-// Update the GPT prompt for conciseness
-async function generateSampleTextForVoice(voiceName: string, description: string) {
-  const prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the \"${voiceName}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-  });
-  return response.choices[0]?.message?.content || "";
-}
-
-export default function Home() {
-  const [activeTab, setActiveTab] = useState("voice-chat");
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [userMessage, setUserMessage] = useState("");
-  const [aiResponse, setAiResponse] = useState("");
-  const [userAudioUrl, setUserAudioUrl] = useState("");
-  const [aiAudioUrl, setAiAudioUrl] = useState("");
-  const [selectedVoice, setSelectedVoice] = useState("alloy");
-  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
-  const [voiceBrief, setVoiceBrief] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [textInput, setTextInput] = useState("");
-  const userAudioRef = useRef<HTMLAudioElement | null>(null);
-  const aiAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingUser, setIsPlayingUser] = useState(false);
-  const [isPlayingAI, setIsPlayingAI] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("English");
-  const [voiceExamples] = useState<VoiceExamples>({
-    alloy: {
-      samples: {
-        English: [
-          { type: "storytelling", text: "Once upon a time, in a world where technology and magic intertwined..." },
-          { type: "general", text: "Welcome! I'm Alloy, and I can help you with tasks, answer questions, or just chat." },
-          { type: "business", text: "In today's meeting, we'll discuss the quarterly results and future projections." }
-        ],
-        Spanish: [
-          { type: "storytelling", text: "Había una vez, en un mundo donde la tecnología y la magia se entrelazaban..." },
-          { type: "general", text: "¡Bienvenido! Soy Alloy, y puedo ayudarte con tareas, responder preguntas o simplemente charlar." },
-          { type: "business", text: "En la reunión de hoy, discutiremos los resultados trimestrales y las proyecciones futuras." }
-        ],
-        French: [
-          { type: "storytelling", text: "Il était une fois, dans un monde où la technologie et la magie s'entremêlaient..." },
-          { type: "general", text: "Bienvenue ! Je suis Alloy, et je peux vous aider avec des tâches, répondre à des questions ou simplement discuter." },
-          { type: "business", text: "Lors de la réunion d'aujourd'hui, nous discuterons des résultats trimestriels et des projections futures." }
-        ]
-      },
-      languages: ["English", "Spanish", "French"],
-      specialties: ["Professional Communication", "Storytelling", "Business"]
-    },
-    echo: {
-      samples: {
-        English: [
-          { type: "entertainment", text: "Let me tell you about the most amazing show I've ever seen!" },
-          { type: "general", text: "Hi there! I'm Echo, your expressive and engaging AI companion." },
-          { type: "creative", text: "The sunset painted the sky in brilliant hues of orange and purple..." }
-        ],
-        German: [
-          { type: "entertainment", text: "Lass mich dir von der erstaunlichsten Show erzählen, die ich je gesehen habe!" },
-          { type: "general", text: "Hallo! Ich bin Echo, dein ausdrucksstarker und engagierter KI-Begleiter." },
-          { type: "creative", text: "Der Sonnenuntergang malte den Himmel in brillanten Orange- und Lilatönen..." }
-        ],
-        Italian: [
-          { type: "entertainment", text: "Lascia che ti racconti dello spettacolo più incredibile che abbia mai visto!" },
-          { type: "general", text: "Ciao! Sono Echo, il tuo compagno AI espressivo e coinvolgente." },
-          { type: "creative", text: "Il tramonto dipingeva il cielo di brillanti sfumature arancioni e viola..." }
-        ]
-      },
-      languages: ["English", "German", "Italian"],
-      specialties: ["Entertainment", "Creative Expression", "Storytelling"]
-    },
-    nova: {
-      samples: {
-        English: [
-          { type: "gaming", text: "Player one, your adventure begins now! Choose your path wisely..." },
-          { type: "general", text: "Hey! I'm Nova, bringing energy and excitement to every interaction!" },
-          { type: "dynamic", text: "3... 2... 1... Let's get this party started!" }
-        ],
-        Japanese: [
-          { type: "gaming", text: "プレイヤー1、あなたの冒険が今始まります！賢明に道を選んでください..." },
-          { type: "general", text: "こんにちは！私はノヴァです。すべてのやり取りにエネルギーと興奮をもたらします！" },
-          { type: "dynamic", text: "3... 2... 1... パーティーを始めましょう！" }
-        ],
-        Korean: [
-          { type: "gaming", text: "플레이어 원, 당신의 모험이 지금 시작됩니다! 현명하게 길을 선택하세요..." },
-          { type: "general", text: "안녕하세요! 저는 노바입니다. 모든 상호작용에 에너지와 흥분을 불어넹습니다!" },
-          { type: "dynamic", text: "3... 2... 1... 파티를 시작합시다!" }
-        ]
-      },
-      languages: ["English", "Japanese", "Korean"],
-      specialties: ["Gaming", "Entertainment", "Dynamic Content"]
-    },
-    onyx: {
-      samples: {
-        English: [
-          { type: "professional", text: "Today's market analysis shows promising growth in key sectors..." },
-          { type: "general", text: "Greetings, I'm Onyx. How may I assist you with your business needs?" },
-          { type: "formal", text: "Ladies and gentlemen, welcome to our annual shareholders meeting." }
-        ],
-        Mandarin: [
-          { type: "professional", text: "今天的市场分析显示关键部门有望增长..." },
-          { type: "general", text: "您好，我是Onyx。我如何协助您处理业务需求？" },
-          { type: "formal", text: "女士们，先生们，欢迎参加我们的年度股东大会。" }
-        ],
-        Russian: [
-          { type: "professional", text: "Сегодняшний анализ рынка показывает многообещающий рост в ключевых секторах..." },
-          { type: "general", text: "Здравствуйте, я Оникс. Как я могу помочь вам с вашими деловыми потребностями?" },
-          { type: "formal", text: "Дамы и господа, добро пожаловать на наше ежегодное собрание акционеров." }
-        ]
-      },
-      languages: ["English", "Mandarin", "Russian"],
-      specialties: ["Business", "Professional Presentations", "Corporate Communications"]
-    },
-    shimmer: {
-      samples: {
-        English: [
-          { type: "education", text: "Let's explore the fascinating world of quantum physics..." },
-          { type: "general", text: "Hello, I'm Shimmer. I specialize in clear and professional communication." },
-          { type: "academic", text: "This research paper presents groundbreaking findings in neural networks." }
-        ],
-        Arabic: [
-          { type: "education", text: "دعونا نستكشف عالم الفيزياء الكمية المذهل..." },
-          { type: "general", text: "مرحباً، أنا شيمر. أتخصص في التواصل الواضح والمهني." },
-          { type: "academic", text: "يقدم هذا البحث نتائج رائدة في الشبكات العصبية." }
-        ],
-        Portuguese: [
-          { type: "education", text: "Vamos explorar o fascinante mundo da física quântica..." },
-          { type: "general", text: "Olá, eu sou Shimmer. Especializo-me em comunicação clara e profissional." },
-          { type: "academic", text: "Este artigo de pesquisa apresenta descobertas revolucionárias em redes neurais." }
-        ]
-      },
-      languages: ["English", "Arabic", "Portuguese"],
-      specialties: ["Education", "Academic", "Professional Communication"]
-    },
-    fable: {
-      samples: {
-        English: [
-          { type: "storytelling", text: "Once upon a time, in a cozy little village, there lived a kind old man..." },
-          { type: "general", text: "Hello! I'm Fable, here to share warm and friendly stories with you." },
-          { type: "children", text: "The little bunny hopped through the forest, meeting new friends along the way." }
-        ],
-        Spanish: [
-          { type: "storytelling", text: "Había una vez, en un pequeño y acogedor pueblo, vivía un anciano amable..." },
-          { type: "general", text: "¡Hola! Soy Fable, aquí para compartir historias cálidas y amigables contigo." },
-          { type: "children", text: "El conejito saltó por el bosque, conociendo nuevos amigos en el camino." }
-        ],
-        French: [
-          { type: "storytelling", text: "Il était une fois, dans un petit village chaleureux, vivait un vieil homme gentil..." },
-          { type: "general", text: "Bonjour! Je suis Fable, ici pour partager des histoires chaleureuses et amicales avec vous." },
-          { type: "children", text: "Le petit lapin sautait à travers la forêt, rencontrant de nouveaux amis en chemin." }
-        ]
-      },
-      languages: ["English", "Spanish", "French"],
-      specialties: ["Storytelling", "Children's Stories", "Friendly Communication"]
-    }
-  });
-  const [characterCount, setCharacterCount] = useState(0);
-  const [emotion, setEmotion] = useState<string>("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
+const HomePage = () => {
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [filteredVoices, setFilteredVoices] = useState<Voice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
+  const [text, setText] = useState<string>('Hello, this is a sample text to demonstrate the text-to-speech functionality. You can replace this with your own content.');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [speed, setSpeed] = useState<number>(1.0);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filterProvider, setFilterProvider] = useState<'all' | 'openai' | 'elevenlabs'>('all');
+  const [filterGender, setFilterGender] = useState<'all' | 'male' | 'female' | 'neutral'>('all');
+  const [recentConversions, setRecentConversions] = useState<Conversion[]>([]);
+  const [isPlaying, setIsPlaying] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [modelInfo, setModelInfo] = useState({
-    name: "Alloy",
-    description: "Neutral & Versatile",
-    languages: ["English"],
-  });
   const [stability, setStability] = useState(80);
   const [similarity, setSimilarity] = useState(70);
   const [style, setStyle] = useState(0);
@@ -368,76 +109,148 @@ export default function Home() {
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [typewriterIndex, setTypewriterIndex] = useState(0);
-  // Store the latest GPT-generated text for animation
   const [gptGeneratedText, setGptGeneratedText] = useState("");
-  // FIX: Move these useState hooks to the top
   const [selectedModel, setSelectedModel] = useState("openai");
-  const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
-  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   const [cardTab, setCardTab] = useState("text-to-speech");
+  const [isRecording, setIsRecording] = useState(false);
+  const [userAudioUrl, setUserAudioUrl] = useState("");
+  const [aiAudioUrl, setAiAudioUrl] = useState("");
+  const [isPlayingUser, setIsPlayingUser] = useState(false);
+  const [isPlayingAI, setIsPlayingAI] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("English");
+  const [emotion, setEmotion] = useState<string>("");
+  const [autoScroll, setAutoScroll] = useState(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const userAudioRef = useRef<HTMLAudioElement | null>(null);
+  const aiAudioRef = useRef<HTMLAudioElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [voiceCategories, setVoiceCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'rating' | 'usage'>('rating');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [selectedPreviewVoice, setSelectedPreviewVoice] = useState<Voice | null>(null);
 
-  // Fetch ElevenLabs voices when model changes
+  // Update the useEffect for fetching voices
   useEffect(() => {
-    if (selectedModel === 'elevenlabs') {
-      setIsLoadingVoices(true);
-      getElevenLabsVoices()
-        .then(voices => {
-          setElevenLabsVoices(voices);
-          if (voices.length > 0) {
-            setSelectedVoice(voices[0].voice_id);
-          }
-        })
-        .catch(error => {
-          toast({
-            title: "Error",
-            description: "Failed to load ElevenLabs voices. Please try again.",
-            variant: "destructive",
-          });
-        })
-        .finally(() => {
-          setIsLoadingVoices(false);
+    const fetchVoices = async () => {
+      try {
+        let voices: Voice[] = [];
+        
+        if (selectedModel === 'openai') {
+          const openaiVoices = await getOpenAIVoices();
+          voices = openaiVoices.map(voice => ({
+            ...voice,
+            provider: 'openai' as const
+          }));
+        } else if (selectedModel === 'elevenlabs') {
+          const elevenlabsVoices = await getElevenLabsVoices();
+          voices = elevenlabsVoices.map(voice => ({
+            ...voice,
+            provider: 'elevenlabs' as const,
+            gender: voice.gender || 'neutral',
+            usageCount: 0 // Initialize usage count
+          }));
+        }
+        
+        // Extract unique categories
+        const categories = Array.from(new Set(voices.map(voice => voice.category)));
+        setVoiceCategories(categories);
+        
+        setVoices(voices);
+        setFilteredVoices(voices);
+        if (voices.length > 0) {
+          setSelectedVoice(voices[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching voices:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch voices. Please try again.",
+          variant: "destructive",
         });
-    } else if (selectedModel === 'openai') {
-      setIsLoadingVoices(true);
-      setTimeout(() => {
-        setSelectedVoice(voicePersonalities[0].id);
-        setIsLoadingVoices(false);
-      }, 300);
-    }
+      }
+    };
+
+    fetchVoices();
   }, [selectedModel]);
 
-  // Update handleTextSubmit to handle both models
-  const handleTextSubmit = async () => {
-    if (!textInput.trim()) return;
-    setIsProcessing(true);
-    try {
-      let audioUrl: string;
-      let duration: number;
+  // Update the filtering logic
+  useEffect(() => {
+    let filtered = voices;
+    
+    if (searchQuery) {
+      filtered = filtered.filter(voice =>
+        voice.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        voice.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        voice.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(voice => voice.category === selectedCategory);
+    }
+    
+    if (filterGender !== 'all') {
+      filtered = filtered.filter(voice => voice.gender === filterGender);
+    }
 
-      if (selectedModel === 'elevenlabs') {
-        const result = await generateElevenLabsSpeech(
-          textInput,
-          selectedVoice,
-          stability,
-          similarity,
-          style
-        );
-        audioUrl = result.audioUrl;
-        // Create a temporary audio element to get duration
-        const audio = new Audio(audioUrl);
-        duration = await new Promise<number>((resolve) => {
-          audio.addEventListener('loadedmetadata', () => {
-            resolve(audio.duration);
-          });
-        });
+    // Sort voices
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        case 'usage':
+          return (b.usageCount || 0) - (a.usageCount || 0);
+        default:
+          return 0;
+      }
+    });
+    
+    setFilteredVoices(filtered);
+  }, [searchQuery, selectedCategory, filterGender, sortBy, voices]);
+
+  // Update the handleTextToSpeech function
+  const handleTextToSpeech = async () => {
+    if (!selectedVoice || !text.trim()) {
+      return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      let result;
+      
+      if (selectedModel === 'openai') {
+        result = await generateOpenAISpeech(text, selectedVoice.id, speed);
       } else {
-        const result = await generateSpeech(textInput, selectedVoice, voiceSpeed);
-        audioUrl = result.audioUrl;
-        duration = result.duration;
+        result = await generateElevenLabsSpeech(
+          text,
+          selectedVoice.id,
+          stability / 100,
+          similarity / 100,
+          style / 100,
+          speakerBoost
+        );
       }
 
+      const conversion: Conversion = {
+        id: Date.now().toString(),
+        text,
+        voiceName: selectedVoice.name,
+        audioUrl: result.audioUrl,
+        timestamp: new Date().toLocaleString(),
+        provider: selectedVoice.provider,
+      };
+      
+      setRecentConversions(prev => [conversion, ...prev].slice(0, 10));
+      setAiAudioUrl(result.audioUrl);
+      
       // Calculate credits used (2 credits per 15 seconds, rounded up)
-      const creditsUsed = Math.ceil((duration / 15) * 2);
+      const creditsUsed = Math.ceil((result.duration / 15) * 2);
       
       // Update quota
       setQuota(prevQuota => {
@@ -453,202 +266,101 @@ export default function Home() {
         return newQuota;
       });
 
-      // Stop any currently playing AI audio before playing new one
-      if (aiAudioRef.current) {
-        aiAudioRef.current.pause();
-        aiAudioRef.current.currentTime = 0;
-      }
-      setAiAudioUrl(audioUrl);
-      
       toast({ 
         title: "Success", 
         description: `Speech generated from your input. Used ${creditsUsed} credits.` 
       });
     } catch (error) {
       console.error("Error generating speech:", error);
+      setError(error instanceof Error ? error.message : "Failed to generate speech. Please try again.");
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to generate speech. Please try again.",
         variant: "destructive",
       });
     } finally {
-      setIsProcessing(false);
+      setIsGenerating(false);
     }
   };
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey && !isProcessing && textInput.trim()) {
-        e.preventDefault();
-        handleTextSubmit();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isProcessing, textInput, handleTextSubmit]);
-
-  // Auto-scroll effect
-  useEffect(() => {
-    if (autoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, autoScroll]);
-
-  // Character count effect
-  useEffect(() => {
-    setCharacterCount(textInput.length);
-  }, [textInput]);
-
-  const handleRecordingComplete = async (audioBlob: Blob) => {
-    setIsProcessing(true);
-    try {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      setUserAudioUrl(audioUrl);
-
-      const transcription = await transcribeSpeech(audioBlob);
-      if (!transcription) throw new Error("Transcription failed");
-      setUserMessage(transcription);
-
-      const systemMessage: Message = {
-        role: "system",
-        content: `You are a helpful AI assistant. Respond in ${selectedLanguage}. Maintain the conversation style and tone appropriate for ${selectedVoice}.`,
-        timestamp: new Date().toISOString(),
-      };
-
-      const userMessage: Message = {
-        role: "user",
-        content: transcription,
-        audioUrl,
-        timestamp: new Date().toISOString(),
-      };
-
-      const updatedMessages = [...messages, systemMessage, userMessage];
-      setMessages(updatedMessages);
-
-      const response = await chatWithAI(updatedMessages);
-      setAiResponse(response);
-
-      const { audioUrl: aiAudio } = await generateSpeech(response, selectedVoice, voiceSpeed);
-      setAiAudioUrl(aiAudio);
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response, audioUrl: aiAudio, timestamp: new Date().toISOString() },
-      ]);
-
-      toast({ title: "Success", description: "Message processed and AI response generated." });
-    } catch (error) {
-      console.error("Error processing recording:", error);
-      toast({
-        title: "Error",
-        description: "Failed to process your message. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  const downloadAudio= (audioUrl: string, filename: string) => {
-    const link = document.createElement("a");
-    link.href = audioUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const clearConversation = () => {
-    if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
-    if (aiAudioUrl) URL.revokeObjectURL(aiAudioUrl);
-    messages.forEach((msg) => msg.audioUrl && URL.revokeObjectURL(msg.audioUrl));
-    setMessages([]);
-    setUserMessage("");
-    setAiResponse("");
-    setUserAudioUrl("");
-    setAiAudioUrl("");
-    setVoiceBrief("");
-    toast({ title: "Conversation Cleared", description: "All messages and audio have been reset." });
-  };
-
-  const toggleAudio = (audioRef: React.MutableRefObject<HTMLAudioElement | null>, setPlaying: (value: boolean) => void, isPlaying: boolean) => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setPlaying(false);
-      } else {
-        audioRef.current.play();
-        setPlaying(true);
-      }
-    }
-  };
-
-  // Helper for emotion emoji
-  const emotionEmoji: Record<string, JSX.Element> = {
-    happy: <Smile className="inline h-4 w-4 text-yellow-500" />,
-    sad: <Frown className="inline h-4 w-4 text-blue-400" />,
-    angry: <Angry className="inline h-4 w-4 text-red-500" />,
-    neutral: <Meh className="inline h-4 w-4 text-gray-400" />,
-  };
-
-  // Restore auto-play AI audio when aiAudioUrl changes
-  useEffect(() => {
-    if (aiAudioUrl && aiAudioRef.current) {
-      aiAudioRef.current.currentTime = 0;
-      aiAudioRef.current.play().catch((err) => {
-        toast({ title: 'Playback Error', description: err.message, variant: 'destructive' });
-        console.error('Auto-play error:', err);
-      });
-    }
-    // Add event listeners for play/pause/end to control isPlayingAI
-    const audio = aiAudioRef.current;
-    if (audio) {
-      const handlePlay = () => setIsPlayingAI(true);
-      const handlePause = () => setIsPlayingAI(false);
-      const handleEnded = () => setIsPlayingAI(false);
-      audio.addEventListener('play', handlePlay);
-      audio.addEventListener('pause', handlePause);
-      audio.addEventListener('ended', handleEnded);
-      // Clean up
-      return () => {
-        audio.removeEventListener('play', handlePlay);
-        audio.removeEventListener('pause', handlePause);
-        audio.removeEventListener('ended', handleEnded);
-      };
-    }
-  }, [aiAudioUrl]);
-
+  // Update the handlePreviewVoice function
   const handlePreviewVoice = async (voiceId: string) => {
-    // Stop any currently playing preview
     if (previewAudio) {
       previewAudio.pause();
       setPreviewAudio(null);
       setPreviewingVoice(null);
     }
+    
     setPreviewingVoice(voiceId);
     try {
-      let audioUrl: string;
-      if (selectedModel === "elevenlabs") {
-        // Use ElevenLabs preview
-        const result = await generateElevenLabsSpeech(
-          "This is a sample of the selected voice.",
-          voiceId,
-          stability,
-          similarity,
-          style
-        );
-        audioUrl = result.audioUrl;
-      } else {
-        // Use OpenAI preview
-        const result = await generateSpeechPreview(
-          "This is a sample of the selected voice.",
-          voiceId,
-          1.0
-        );
-        audioUrl = result.audioUrl;
+      let result;
+      const voice = voices.find(v => v.id === voiceId);
+      
+      // Generate unique preview text based on voice characteristics
+      let previewText = "This is a sample of the selected voice.";
+      
+      if (voice) {
+        if (voice.provider === 'elevenlabs') {
+          switch (voice.category?.toLowerCase()) {
+            case 'storytelling':
+              previewText = "Once upon a time, in a world of endless possibilities, where every voice tells a unique story...";
+              break;
+            case 'business':
+              previewText = "Welcome to our quarterly earnings call. Today, we're excited to share our latest achievements and future strategies.";
+              break;
+            case 'education':
+              previewText = "Today, we'll explore the fascinating world of quantum physics, where particles can exist in multiple states simultaneously.";
+              break;
+            case 'entertainment':
+              previewText = "Lights, camera, action! Welcome to the most exciting show of the year, where dreams come to life!";
+              break;
+            case 'gaming':
+              previewText = "Player one, your adventure begins now! Choose your path wisely, for every decision shapes your destiny.";
+              break;
+            default:
+              previewText = `Hello! I'm ${voice.name}, and I'm here to bring your words to life with clarity and precision.`;
+          }
+        } else {
+          // OpenAI voices
+          switch (voice.name.toLowerCase()) {
+            case 'alloy':
+              previewText = "Welcome to the future of voice technology, where clarity meets versatility in perfect harmony.";
+              break;
+            case 'echo':
+              previewText = "Hey there! I'm Echo, and I'm here to make your content come alive with warmth and personality!";
+              break;
+            case 'fable':
+              previewText = "In a cozy little village, where stories come to life, I'm here to share tales of wonder and magic.";
+              break;
+            case 'nova':
+              previewText = "3... 2... 1... Blast off into a world of dynamic energy and excitement!";
+              break;
+            case 'onyx':
+              previewText = "Ladies and gentlemen, welcome to our annual shareholders meeting. Today, we'll discuss our strategic vision.";
+              break;
+            case 'shimmer':
+              previewText = "Let's explore the fascinating world of neural networks and artificial intelligence together.";
+              break;
+            default:
+              previewText = `Hello! I'm ${voice.name}, ready to bring your ideas to life with natural, expressive speech.`;
+          }
+        }
       }
-      const audio = new Audio(audioUrl);
+      
+      if (selectedModel === "elevenlabs") {
+        result = await generateElevenLabsSpeech(
+          previewText,
+          voiceId,
+          stability / 100,
+          similarity / 100,
+          style / 100,
+          speakerBoost
+        );
+      } else {
+        result = await generateOpenAISpeech(previewText, voiceId, 1.0);
+      }
+
+      const audio = new Audio(result.audioUrl);
       setPreviewAudio(audio);
       audio.onended = () => setPreviewingVoice(null);
       audio.onpause = () => setPreviewingVoice(null);
@@ -663,385 +375,550 @@ export default function Home() {
     }
   };
 
+  const getProviderColor = (provider: string) => {
+    return provider === 'elevenlabs' ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gradient-to-r from-blue-500 to-cyan-500';
+  };
+
+  const getProviderBadge = (provider: string) => {
+    return provider === 'elevenlabs' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
+  };
+
   const handleAutoGenerateText = async () => {
-    // Stop any running animation and clear text
-    setIsAutoGenerating(false);
-    setTypewriterIndex(0);
-    setTextInput("");
-    setGptGeneratedText("");
-
     setIsAutoGenerating(true);
-    let voice, description;
-    if (selectedModel === 'elevenlabs') {
-      voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
-      description = voice ? voice.description || voice.category : "";
-    } else {
-      voice = voicePersonalities.find(v => v.id === selectedVoice);
-      description = voice ? voice.description : "";
-    }
-
-    let prompt;
-    if (textInput.trim()) {
-      prompt = `Improve or rewrite the following text to best demonstrate the \"${voice?.name}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice. Here is the text: ${textInput}`;
-    } else {
-      prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the \"${voice?.name}\" voice, described as: ${description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
-    }
-
     try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
+      const prompt = `Generate a short, 2-3 sentence sample text that best demonstrates the "${selectedVoice?.name}" voice, described as: ${selectedVoice?.description}. The text should be suitable for speech synthesis and showcase the unique qualities of this voice.`;
+      
+      const response = await fetch('/api/generate-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
       });
-      const aiText = response.choices[0]?.message?.content || "";
-      setGptGeneratedText(aiText);
+
+      if (!response.ok) {
+        throw new Error('Failed to generate text');
+      }
+
+      const data = await response.json();
+      setGptGeneratedText(data.text);
       setTypewriterIndex(0);
-      setTextInput(""); // Clear before animating
-    } catch (e) {
-      setGptGeneratedText("");
-      setTextInput("Failed to generate sample text. Please try again.");
+      setText(""); // Clear before animating
+    } catch (error) {
+      console.error('Error generating text:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate sample text. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsAutoGenerating(false);
     }
   };
 
-  // Animate the appearance of the GPT-generated text
-  useEffect(() => {
-    if (isAutoGenerating && gptGeneratedText && typewriterIndex <= gptGeneratedText.length) {
-      const timeout = setTimeout(() => {
-        setTextInput(gptGeneratedText.slice(0, typewriterIndex));
-        setTypewriterIndex(typewriterIndex + 1);
-      }, 18);
-      if (typewriterIndex === gptGeneratedText.length) {
-        setTimeout(() => setIsAutoGenerating(false), 300);
-      }
-      return () => clearTimeout(timeout);
-    }
-  }, [isAutoGenerating, typewriterIndex, gptGeneratedText]);
-
-  useEffect(() => {
-    // Stop AI audio if playing when the voice is changed
-    if (aiAudioRef.current) {
-      aiAudioRef.current.pause();
-      aiAudioRef.current.currentTime = 0;
-    }
-    setIsPlayingAI(false);
-    // Clear the text input, GPT-generated text, and reset animation state
-    setTextInput("");
-    setGptGeneratedText("");
-    setTypewriterIndex(0);
-    setIsAutoGenerating(false);
-  }, [selectedVoice]);
-
-  // Update voice selection UI
-  const renderVoiceSelector = () => {
-    if (selectedModel === 'elevenlabs') {
-      return (
-        <Select
-          value={selectedVoice}
-          onValueChange={setSelectedVoice}
-          aria-label="Select ElevenLabs voice"
-          disabled={isLoadingVoices}
-        >
-          <SelectTrigger className="w-64">
-            <div className="flex items-center gap-2 w-full">
-              <span className="flex items-center justify-center h-5 w-5">
-                {(() => {
-                  const v = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
-                  return v ? getElevenLabsVoiceIcon(v.category) : <Speaker className="h-5 w-5" />;
-                })()}
-              </span>
-              <span className="truncate max-w-full">
-                {isLoadingVoices
-                  ? "Loading voices..."
-                  : elevenLabsVoices.find(v => v.voice_id === selectedVoice)
-                    ? `${elevenLabsVoices.find(v => v.voice_id === selectedVoice)?.name} - ${elevenLabsVoices.find(v => v.voice_id === selectedVoice)?.description || elevenLabsVoices.find(v => v.voice_id === selectedVoice)?.category || ""}`
-                    : "Select a voice"}
-              </span>
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            {elevenLabsVoices.map((voice) => (
-              <SelectItem key={voice.voice_id} value={voice.voice_id}>
-                <div className="flex items-center gap-2 w-full">
-                  <span className="flex items-center justify-center h-5 w-5">
-                    {getElevenLabsVoiceIcon(voice.category)}
-                  </span>
-                  <span className="truncate max-w-full">{voice.name} - {voice.description || voice.category}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      );
-    }
-
-    return (
-      <Select
-        value={selectedVoice}
-        onValueChange={setSelectedVoice}
-        aria-label="Select OpenAI voice"
-        disabled={isLoadingVoices}
-      >
-        <SelectTrigger className="w-64">
-          <div className="flex items-center gap-2 w-full">
-            {isLoadingVoices ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              voicePersonalities.find(v => v.id === selectedVoice)?.icon
-            )}
-            <span className="truncate max-w-full">
-              {isLoadingVoices
-                ? "Loading voices..."
-                : voicePersonalities.find(v => v.id === selectedVoice)?.name +
-                  " - " +
-                  voicePersonalities.find(v => v.id === selectedVoice)?.description}
-            </span>
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          {voicePersonalities.map((voice) => (
-            <SelectItem key={voice.id} value={voice.id}>
-              <div className="flex items-center gap-2 w-full">
-                {voice.icon}
-                <span className="truncate max-w-full">
-                  {voice.name} - {voice.description}
-                </span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
+  const downloadAudio = (audioUrl: string, filename: string) => {
+    const link = document.createElement("a");
+    link.href = audioUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  useEffect(() => {
-    if (selectedModel === "openai") {
-      const voice = voicePersonalities.find(v => v.id === selectedVoice);
-      if (voice) {
-        setModelInfo({
-          name: voice.name,
-          description: voice.description,
-          languages: voiceExamples[voice.id]?.languages || ["English"],
-        });
-      }
-    } else if (selectedModel === "elevenlabs") {
-      const voice = elevenLabsVoices.find(v => v.voice_id === selectedVoice);
-      if (voice) {
-        setModelInfo({
-          name: voice.name,
-          description: voice.description || voice.category,
-          languages: ["See ElevenLabs docs"], // Or use real data if available
-        });
-      }
-    }
-  }, [selectedModel, selectedVoice, elevenLabsVoices]);
+  // Helper function to get trending voices (voices with highest ratings)
+  const getTrendingVoices = () => {
+    return [...voices]
+      .filter(voice => hasRating(voice))
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+      .slice(0, 6);
+  };
+
+  // Update the getPopularVoices function
+  const getPopularVoices = () => {
+    return [...voices]
+      .filter(voice => hasUsageCount(voice))
+      .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+      .slice(0, 6);
+  };
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       {/* Header */}
-      <header className="w-full flex items-center justify-between px-8 pt-8 pb-2 border-b border-muted">
-        <div>
-          <h1 className="text-2xl font-bold leading-tight mb-1">Voice Synthesis Engine</h1>
-          <p className="text-sm text-muted-foreground">Unleash the power of advanced AI to generate natural, expressive speech from text—across languages, tones, and styles.</p>
+      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                <Volume2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                  Audra
+                </h1>
+                <p className="text-sm text-gray-500">AI Voice Collection</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button variant="outline" size="icon" onClick={() => setSettingsOpen(true)}>
+                <Settings className="h-5 w-5" />
+              </Button>
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
+            </div>
+          </div>
         </div>
       </header>
-      {/* Main Card */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8">
-        <div className="w-full max-w-4xl rounded-2xl shadow-xl border bg-background/80 mx-auto p-0 min-h-[480px]">
-          {/* Card Tabs and Quota */}
-          <div className="flex items-center justify-between px-8 pt-6 pb-2 border-b">
-            <div className="flex gap-4">
-              <button
-                className={`text-sm font-semibold transition-colors ${cardTab === "text-to-speech" ? "text-primary" : "text-muted-foreground"}`}
-                onClick={() => setCardTab("text-to-speech")}
-              >
-                TEXT TO SPEECH
-              </button>
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Search and Filters Bar */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search voices by name, category, or description..."
+                className="pl-10"
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium">Model</span>
+            <div className="flex gap-2">
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
                 <SelectContent>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>
-                  ))}
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-          {/* Textarea */}
-          <div className="px-8 pt-8 pb-4">  
-            <div className="relative">
-              <textarea
-                className="w-full min-h-[340px] text-lg p-6 rounded-lg border-2 border-muted bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                value={textInput}
-                onChange={e => setTextInput(e.target.value)}
-                placeholder="Type or paste your text here..."
-                disabled={isProcessing || isAutoGenerating}
-              />
-              <button
-                type="button"
-                className={`absolute top-3 right-3 bg-muted rounded-full p-2 hover:bg-primary/10 transition`}
-                onClick={handleAutoGenerateText}
-                title="Auto-generate sample text"
-                tabIndex={0}
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="rating">Rating</SelectItem>
+                  <SelectItem value="usage">Usage</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
               >
-                <Sparkles className={`h-5 w-5 text-primary ${isAutoGenerating ? 'animate-spin' : ''}`} />
-              </button>
+                {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+              </Button>
             </div>
           </div>
-          {/* Bottom Controls Row */}
-          <div className="flex items-center justify-between px-8 pb-8 pt-2 gap-4 flex-wrap">
-            {/* Voice selector and settings */}
-            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              {renderVoiceSelector()}
-              {previewingVoice === selectedVoice ? (
-                <Loader2 className="h-5 w-5 animate-spin text-primary ml-2" />
-              ) : (
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="ml-2"
-                  onClick={() => handlePreviewVoice(selectedVoice)}
-                  aria-label="Play voice preview"
-                >
-                  <Play className="h-5 w-5" />
-                </Button>
-              )}
-              <Button variant="outline" className="ml-2 px-6" onClick={() => setSettingsOpen(true)}>
-                Settings
+        </div>
+
+        {/* Category Pills */}
+        <div className="mb-8 overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            <Button
+              variant={selectedCategory === 'all' ? 'default' : 'outline'}
+              onClick={() => setSelectedCategory('all')}
+              className="whitespace-nowrap"
+            >
+              All Categories
+            </Button>
+            {voiceCategories.map((category) => (
+              <Button
+                key={category}
+                variant={selectedCategory === category ? 'default' : 'outline'}
+                onClick={() => setSelectedCategory(category)}
+                className="whitespace-nowrap"
+              >
+                {category}
               </Button>
-              <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-                <SheetContent side="right" className="max-w-md w-full">
-                  <SheetHeader>
-                    <SheetTitle>Settings</SheetTitle>
-                  </SheetHeader>
-                  {/* Model Info Card */}
-                  <div className="rounded-lg border bg-muted p-4 mb-6">
-                    <div className="font-semibold mb-1">{modelInfo.name}</div>
-                    <div className="text-sm text-muted-foreground mb-2">{modelInfo.description}</div>
-                    <div className="flex gap-2 flex-wrap">
-                      {modelInfo.languages.map(lang => (
+            ))}
+          </div>
+        </div>
+
+        {/* Trending Voices Section */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-6">Trending Voices</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {getTrendingVoices().map((voice) => (
+              <Card
+                key={voice.id}
+                className="cursor-pointer transition-all hover:shadow-md"
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-12 h-12 rounded-full ${getProviderColor(voice.provider)} flex items-center justify-center text-white font-semibold`}>
+                        {voice.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{voice.name}</h3>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="secondary" className={getProviderBadge(voice.provider)}>
+                            {voice.provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'}
+                          </Badge>
+                          {hasRating(voice) && (
+                            <div className="flex items-center space-x-1">
+                              <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                              <span className="text-xs text-gray-600">{voice.rating}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePreviewVoice(voice.id)}
+                    >
+                      {previewingVoice === voice.id ? (
+                        <div className="w-4 h-4 bg-purple-500 rounded-full animate-pulse"></div>
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <Badge variant="outline">{voice.category}</Badge>
+                    {hasAccent(voice) && <span>{voice.accent}</span>}
+                    <span className="capitalize">{voice.gender}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Most Popular Voices Section */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-6">Most Popular Voices</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {getPopularVoices().map((voice) => (
+              <Card
+                key={voice.id}
+                className="cursor-pointer transition-all hover:shadow-md"
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-12 h-12 rounded-full ${getProviderColor(voice.provider)} flex items-center justify-center text-white font-semibold`}>
+                        {voice.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{voice.name}</h3>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="secondary" className={getProviderBadge(voice.provider)}>
+                            {voice.provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'}
+                          </Badge>
+                          {hasRating(voice) && (
+                            <div className="flex items-center space-x-1">
+                              <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                              <span className="text-xs text-gray-600">{voice.rating}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePreviewVoice(voice.id)}
+                    >
+                      {previewingVoice === voice.id ? (
+                        <div className="w-4 h-4 bg-purple-500 rounded-full animate-pulse"></div>
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <Badge variant="outline">{voice.category}</Badge>
+                    {hasAccent(voice) && <span>{voice.accent}</span>}
+                    <span className="capitalize">{voice.gender}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* All Voices Section */}
+        <section>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredVoices.map((voice) => (
+              <Card
+                key={voice.id}
+                className="cursor-pointer transition-all hover:shadow-md"
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-12 h-12 rounded-full ${getProviderColor(voice.provider)} flex items-center justify-center text-white font-semibold`}>
+                        {voice.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{voice.name}</h3>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="secondary" className={getProviderBadge(voice.provider)}>
+                            {voice.provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'}
+                          </Badge>
+                          {hasRating(voice) && (
+                            <div className="flex items-center space-x-1">
+                              <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                              <span className="text-xs text-gray-600">{voice.rating}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handlePreviewVoice(voice.id)}
+                    >
+                      {previewingVoice === voice.id ? (
+                        <div className="w-4 h-4 bg-purple-500 rounded-full animate-pulse"></div>
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <Badge variant="outline">{voice.category}</Badge>
+                    {hasAccent(voice) && <span>{voice.accent}</span>}
+                    <span className="capitalize">{voice.gender}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Voice Preview Modal */}
+        <Sheet open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+          <SheetContent side="right" className="max-w-md w-full">
+            <SheetHeader>
+              <SheetTitle>Voice Preview</SheetTitle>
+            </SheetHeader>
+            {selectedPreviewVoice && (
+              <div className="mt-6 space-y-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <div className={`w-16 h-16 rounded-full ${getProviderColor(selectedPreviewVoice.provider)} flex items-center justify-center text-white text-xl font-semibold`}>
+                        {selectedPreviewVoice.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold">{selectedPreviewVoice.name}</h3>
+                        <p className="text-sm text-gray-600">{selectedPreviewVoice.category}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-600">{selectedPreviewVoice.description}</p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {selectedPreviewVoice.languages?.map(lang => (
                         <Badge key={lang} variant="secondary">{lang}</Badge>
                       ))}
                     </div>
-                  </div>
-                  {/* Sliders and toggles for ElevenLabs */}
-                  {selectedModel === 'elevenlabs' && (
-                    <>
-                      <div className="mb-4">
-                        <div className="mb-2 flex justify-between text-sm font-medium">
-                          <span>Stability</span>
-                          <span className="text-muted-foreground">{stability}%</span>
-                        </div>
-                        <Slider min={0} max={100} step={1} value={[stability]} onValueChange={v => setStability(v[0])} />
-                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                          <span>More variable</span>
-                          <span>More stable</span>
-                        </div>
-                      </div>
-                      <div className="mb-4">
-                        <div className="mb-2 flex justify-between text-sm font-medium">
-                          <span>Similarity</span>
-                          <span className="text-muted-foreground">{similarity}%</span>
-                        </div>
-                        <Slider min={0} max={100} step={1} value={[similarity]} onValueChange={v => setSimilarity(v[0])} />
-                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                          <span>Low</span>
-                          <span>High</span>
-                        </div>
-                      </div>
-                      <div className="mb-4">
-                        <div className="mb-2 flex justify-between text-sm font-medium">
-                          <span>Style Exaggeration</span>
-                          <span className="text-muted-foreground">{style}%</span>
-                        </div>
-                        <Slider min={0} max={100} step={1} value={[style]} onValueChange={v => setStyle(v[0])} />
-                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                          <span>None</span>
-                          <span>Exaggerated</span>
-                        </div>
-                      </div>
-                      {/* Speaker Boost Toggle */}
-                      <div className="flex items-center gap-3 mb-6">
-                        <Switch checked={speakerBoost} onCheckedChange={setSpeakerBoost} id="speaker-boost" />
-                        <label htmlFor="speaker-boost" className="text-sm font-medium">Speaker boost</label>
-                      </div>
-                    </>
-                  )}
-                  {/* Speed slider for OpenAI */}
-                  {selectedModel === 'openai' && (
-                    <div className="mb-4">
-                      <div className="mb-2 flex justify-between text-sm font-medium">
-                        <span>Speed</span>
-                        <span className="text-muted-foreground">{voiceSpeed.toFixed(2)}x</span>
-                      </div>
-                      <Slider min={0.5} max={2.0} step={0.01} value={[voiceSpeed]} onValueChange={v => setVoiceSpeed(v[0])} />
-                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>0.5x</span>
-                        <span>2.0x</span>
-                      </div>
+                  </CardContent>
+                </Card>
+
+                {hasElevenLabsSettings(selectedPreviewVoice) && (
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Stability: {selectedPreviewVoice.stability}%</Label>
+                      <Slider
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={[selectedPreviewVoice.stability]}
+                        disabled
+                      />
                     </div>
-                  )}
-                  <SheetFooter>
-                    <Button variant="outline" onClick={() => {
-                      if (selectedModel === "openai") {
-                        setVoiceSpeed(1.0);
-                      } else {
-                        setStability(80);
-                        setSimilarity(70);
-                        setStyle(0);
-                        setSpeakerBoost(false);
-                      }
-                    }}>Reset</Button>
-                  </SheetFooter>
-                </SheetContent>
-              </Sheet>
-            </div>
-            {/* Char count and generate/download */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-sm text-muted-foreground">{textInput.length}/5000</span>
-              <Button
-                onClick={handleTextSubmit}
-                disabled={isProcessing || !textInput.trim() || isPlayingAI}
-                className="flex items-center gap-3 h-12 px-6 text-base min-w-[150px] justify-center"
-              >
-                {isProcessing ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    <Play className="h-5 w-5" />
-                    <span>Generate Speech</span>
-                  </>
+                    <div>
+                      <Label>Similarity: {selectedPreviewVoice.similarity}%</Label>
+                      <Slider
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={[selectedPreviewVoice.similarity]}
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <Label>Style: {selectedPreviewVoice.style}%</Label>
+                      <Slider
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={[selectedPreviewVoice.style]}
+                        disabled
+                      />
+                    </div>
+                  </div>
                 )}
-              </Button>
-              <Button
-                onClick={() => aiAudioUrl && downloadAudio(aiAudioUrl, "tts-audio.wav")}
-                variant="outline"
-                className="flex items-center justify-center h-12 w-12 p-0"
-                disabled={!aiAudioUrl}
-                aria-label={aiAudioUrl ? "Download audio" : "No audio to download"}
-              >
-                <Download className="h-5 w-5" />
-              </Button>
-            </div>
+
+                <div className="flex justify-center">
+                  <Button
+                    onClick={() => handlePreviewVoice(selectedPreviewVoice.id)}
+                    className="w-full"
+                  >
+                    {previewingVoice === selectedPreviewVoice.id ? (
+                      <div className="w-4 h-4 bg-purple-500 rounded-full animate-pulse" />
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Preview Voice
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Settings Sheet */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className="max-w-md w-full">
+          <SheetHeader>
+            <SheetTitle>Settings</SheetTitle>
+          </SheetHeader>
+          
+          {/* Model Info Card */}
+          <Card className="mt-6">
+            <CardContent className="p-4">
+              <div className="font-semibold mb-1">{selectedVoice?.name}</div>
+              <div className="text-sm text-muted-foreground mb-2">{selectedVoice?.description}</div>
+              <div className="flex gap-2 flex-wrap">
+                {selectedVoice?.languages?.map(lang => (
+                  <Badge key={lang} variant="secondary">{lang}</Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Voice Settings */}
+          <div className="mt-6 space-y-6">
+            {selectedModel === 'elevenlabs' && (
+              <>
+                <div>
+                  <Label>Stability: {stability}%</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[stability]}
+                    onValueChange={(value) => setStability(value[0])}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>More variable</span>
+                    <span>More stable</span>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Similarity: {similarity}%</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[similarity]}
+                    onValueChange={(value) => setSimilarity(value[0])}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Low</span>
+                    <span>High</span>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Style Exaggeration: {style}%</Label>
+                  <Slider
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[style]}
+                    onValueChange={(value) => setStyle(value[0])}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>None</span>
+                    <span>Exaggerated</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={speakerBoost}
+                    onCheckedChange={setSpeakerBoost}
+                    id="speaker-boost"
+                  />
+                  <Label htmlFor="speaker-boost">Speaker boost</Label>
+                </div>
+              </>
+            )}
+
+            {selectedModel === 'openai' && (
+              <div>
+                <Label>Speed: {speed.toFixed(2)}x</Label>
+                <Slider
+                  min={0.5}
+                  max={2.0}
+                  step={0.01}
+                  value={[speed]}
+                  onValueChange={(value) => setSpeed(value[0])}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0.5x</span>
+                  <span>2.0x</span>
+                </div>
+              </div>
+            )}
           </div>
-          {/* Hidden audio element */}
-          {aiAudioUrl && (
-            <audio
-              ref={aiAudioRef}
-              src={aiAudioUrl}
-              onEnded={() => setIsPlayingAI(false)}
-              onPause={() => setIsPlayingAI(false)}
-              onPlay={() => setIsPlayingAI(true)}
-            />
-          )}
-        </div>
-      </main>
+
+          <SheetFooter className="mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (selectedModel === "openai") {
+                  setSpeed(1.0);
+                } else {
+                  setStability(80);
+                  setSimilarity(70);
+                  setStyle(0);
+                  setSpeakerBoost(false);
+                }
+              }}
+            >
+              Reset
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Hidden audio elements */}
+      {aiAudioUrl && (
+        <audio
+          ref={aiAudioRef}
+          src={aiAudioUrl}
+          onEnded={() => setIsPlayingAI(false)}
+          onPause={() => setIsPlayingAI(false)}
+          onPlay={() => setIsPlayingAI(true)}
+        />
+      )}
+      {userAudioUrl && (
+        <audio
+          ref={userAudioRef}
+          src={userAudioUrl}
+          onEnded={() => setIsPlayingUser(false)}
+          onPause={() => setIsPlayingUser(false)}
+          onPlay={() => setIsPlayingUser(true)}
+        />
+      )}
     </div>
   );
-}
+};
 
+export default HomePage;

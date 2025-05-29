@@ -20,8 +20,11 @@ interface Voice {
 }
 
 interface ElevenLabsVoice {
-  voice_id: string;
+  id: string;
   name: string;
+  category: string;
+  description: string;
+  preview_url: string;
 }
 
 // OpenAI voices
@@ -71,7 +74,7 @@ export default function VoiceChangerPage() {
           if (mounted) {
             setElevenLabsVoices(voices);
             if (voices.length > 0) {
-              setTargetVoice(voices[0].voice_id);
+              setTargetVoice(voices[0].id);
             }
           }
         })
@@ -576,7 +579,7 @@ export default function VoiceChangerPage() {
                     </div>
                   ) : (
                     elevenLabsVoices.map((voice) => (
-                      <SelectItem key={voice.voice_id} value={voice.voice_id}>
+                      <SelectItem key={voice.id} value={voice.id}>
                         {voice.name}
                       </SelectItem>
                     ))

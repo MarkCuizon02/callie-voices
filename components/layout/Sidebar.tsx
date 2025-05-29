@@ -3,14 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Mic, Bot, History, User, ChevronLeft, ChevronRight, CreditCard, Settings, BarChart, Moon, Volume2, Music2 } from "lucide-react";
+import { Mic, Bot, History, User, ChevronLeft, ChevronRight, CreditCard, Settings, BarChart, Moon, Volume2, Music2, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 
 const playgroundLinks = [
   {
-    name: "Text to Speech",
+    name: "Home",
     href: "/",
+    icon: Home
+  },
+  {
+    name: "Text to Speech",
+    href: "/text-to-speech",
     icon: Mic
   },
   {

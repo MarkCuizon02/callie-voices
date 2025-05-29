@@ -1,5 +1,10 @@
 import OpenAI from 'openai';
 
+const openai = new OpenAI({
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true,
+});
+
 // Valid voices for OpenAI TTS
 const VALID_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 type Voice = typeof VALID_VOICES[number];
@@ -113,42 +118,123 @@ export async function transcribeSpeech(audioBlob: Blob): Promise<string> {
   }
 }
 
-/**
- * Generates speech from text using OpenAI's TTS API
- * @param text - The text to convert to speech
- * @param voice - The voice to use (default: 'alloy')
- * @param speed - The speed of the speech (default: 1.0)
- * @returns Object containing the audio URL
- */
-export async function generateSpeech(
+export interface OpenAIVoice {
+  id: string;
+  name: string;
+  provider: 'openai';
+  gender: 'male' | 'female' | 'neutral';
+  category: string;
+  description: string;
+  languages: string[];
+  specialties: string[];
+  rating?: number;
+  accent?: string;
+}
+
+export const getOpenAIVoices = async (): Promise<OpenAIVoice[]> => {
+  try {
+    // OpenAI doesn't have a direct API for voice listing, so we'll use our predefined list
+    // In a real application, you might want to store this in a database
+    const voices: OpenAIVoice[] = [
+      {
+        id: 'alloy',
+        name: 'Alloy',
+        provider: 'openai',
+        gender: 'neutral',
+        category: 'Natural',
+        description: 'Neutral & Versatile',
+        languages: ['English', 'Spanish', 'French'],
+        specialties: ['Professional Communication', 'Storytelling', 'Business']
+      },
+      {
+        id: 'echo',
+        name: 'Echo',
+        provider: 'openai',
+        gender: 'male',
+        category: 'Natural',
+        description: 'Expressive & Engaging',
+        languages: ['English', 'German', 'Italian'],
+        specialties: ['Entertainment', 'Creative Expression', 'Storytelling']
+      },
+      {
+        id: 'fable',
+        name: 'Fable',
+        provider: 'openai',
+        gender: 'female',
+        category: 'Storytelling',
+        description: 'Warm & Friendly',
+        languages: ['English', 'Spanish', 'French'],
+        specialties: ['Storytelling', 'Children\'s Stories', 'Friendly Communication']
+      },
+      {
+        id: 'nova',
+        name: 'Nova',
+        provider: 'openai',
+        gender: 'female',
+        category: 'Professional',
+        description: 'Energetic & Bright',
+        languages: ['English', 'Japanese', 'Korean'],
+        specialties: ['Gaming', 'Entertainment', 'Dynamic Content']
+      },
+      {
+        id: 'onyx',
+        name: 'Onyx',
+        provider: 'openai',
+        gender: 'male',
+        category: 'Deep',
+        description: 'Deep & Authoritative',
+        languages: ['English', 'Mandarin', 'Russian'],
+        specialties: ['Business', 'Professional Presentations', 'Corporate Communications']
+      },
+      {
+        id: 'shimmer',
+        name: 'Shimmer',
+        provider: 'openai',
+        gender: 'female',
+        category: 'Bright',
+        description: 'Clear & Professional',
+        languages: ['English', 'Arabic', 'Portuguese'],
+        specialties: ['Education', 'Academic', 'Professional Communication']
+      }
+    ];
+
+    return voices;
+  } catch (error) {
+    console.error('Error fetching OpenAI voices:', error);
+    throw new Error('Failed to fetch OpenAI voices');
+  }
+};
+
+export const generateSpeech = async (
   text: string,
   voice: string = 'alloy',
   speed: number = 1.0
-): Promise<{ audioUrl: string }> {
+): Promise<{ audioUrl: string; duration: number }> => {
   try {
-    if (!text.trim()) {
-      throw new Error('Empty text provided for speech generation');
-    }
-    if (!VALID_VOICES.includes(voice as Voice)) {
-      throw new Error(`Invalid voice: ${voice}. Must be one of ${VALID_VOICES.join(', ')}`);
-    }
-    if (speed < 0.5 || speed > 2.0) {
-      throw new Error('Speed must be between 0.5 and 2.0');
-    }
+    const response = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: voice as any,
+      input: text,
+      speed
+    });
 
-    const response = await callServerEndpoint('speech', { text, voice, speed });
     const audioBlob = await response.blob();
-    if (!audioBlob.size) {
-      throw new Error('Empty audio response received');
-    }
-
     const audioUrl = URL.createObjectURL(audioBlob);
-    return { audioUrl };
+    
+    // Create a temporary audio element to get duration
+    const audio = new Audio(audioUrl);
+    const duration = await new Promise<number>((resolve) => {
+      audio.addEventListener('loadedmetadata', () => {
+        resolve(audio.duration);
+      });
+    });
+
+    return { audioUrl, duration };
   } catch (error) {
     console.error('Error generating speech:', error);
-    throw new Error(`Speech generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error('Failed to generate speech');
   }
-}
+};
 
 /**
  * Chats with OpenAI's Chat API
